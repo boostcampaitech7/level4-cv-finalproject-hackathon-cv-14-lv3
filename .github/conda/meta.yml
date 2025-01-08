@@ -1,0 +1,29 @@
+{% set name = "GORANI - final" %}
+
+source:
+  path: ../../
+
+build:
+  noarch: python
+
+requirements:
+  host:
+    - python
+    - pip
+    - numpy
+    - torch
+  run:
+    - python
+    - pip
+    - numpy
+    - torch
+
+test:
+  imports:
+    - transformers
+
+about:
+  home: https://huggingface.co
+  license: Apache License 2.0
+  license_file: LICENSE
+  summary: "🤗Transformers: State-of-the-art Natural Language Processing for Pytorch and TensorFlow 2.0."
