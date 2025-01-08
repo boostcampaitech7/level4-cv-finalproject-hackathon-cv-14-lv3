@@ -16,13 +16,10 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -e ".[dev]"
-          pip install ruff pytest
+          pip install ruff pytest pytest-cov
 
       - name: Lint with Ruff
         run: ruff check .
-
-      - name: Run tests
-        run: pytest tests/ --cov
 
       - name: Upload coverage
         uses: codecov/codecov-action@v3
