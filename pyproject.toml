@@ -40,3 +40,4 @@ lint.select = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["PLR2004", "S101"]
 "scripts/*" = ["T20"]
+"src/GORANI/__init__.py" = ["N999"]

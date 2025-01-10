@@ -1,23 +1,24 @@
 ## Why should i use Ruff?
 
-- `Ruff`는 전 세계에서 가장 유명한 `pre-commit` 도구입니다. Ruff는 Python 코드 품질 관리를 담당하는 도구로, **코드 스타일 검사, 오류 검출** 등을 수행합니다. 또한 아래 `Open-Source`들의 모든 역할을 수행합니다.
+- `Ruff`는 전 세계에서 가장 유명한 `python` 코드 품질 관리를 담당하는 도구로, **코드 스타일 검사, 오류 검출** 등을 수행합니다. 아래 `pre-commit`들의 모든 기능을 수행하며, `Rust` 기반이므로 매우 빠르게 작동합니다.
 
 - [Black](https://github.com/psf/black) : `formatting`은 작성된 코드의 줄 간격, 띄어쓰기 등 **양식**을 다듬어 줍니다.
 - [isort](https://github.com/PyCQA/isort) : `import`를 활용해서 불러오는 `python library`를 자동으로 **정렬**해줍니다.
 - [Flake8](https://github.com/PyCQA/flake8) : 작성한 코드에서 **사용하지 않는** `python library`를 자동으로 제거해줍니다.
 
+
 ## 🧐 How to use??
 
 ```bash
-# (First setting) Install
+# 초기 설정
 pip install pre-commit
 pre-commit install
 
-# Check for python files
-ruff check --fix .
+# Ruff를 실행합니다.
+ruff check --fix .                 # 현재 경로의 모든 파일의 문제를 수정합니다.
+ruff check --fix --unsafe-fixes .  # 안전하지 않은 문제도 함께 수정합니다.
 
-# Check for python files (Fix also unsafe issue)
-ruff check --fix --unsafe-fixes .
+ruff format                        # Fix the format
 
 # Run with pre-commit-hooks
 pre-commit run --all-files
@@ -39,7 +40,7 @@ repos:
         args: ["--maxkb=1024"]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.6
+    rev: v0.9.0
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
