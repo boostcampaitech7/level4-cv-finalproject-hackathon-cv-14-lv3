@@ -13,3 +13,8 @@ __pycache__/
 -unsafe-fixes
 .ruff_cache
 .coverage
+
+# Database
+*.csv
+node_modules/
+credentials.json
