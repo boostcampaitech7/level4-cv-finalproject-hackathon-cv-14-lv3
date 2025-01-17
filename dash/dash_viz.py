@@ -473,10 +473,6 @@ app.layout = html.Div([
     ], style=ROW_STYLE)
 ])
 
-
-
-
-
 if __name__ == '__main__':
     app.run_server(debug=True)
 
