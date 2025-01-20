@@ -1,9 +1,11 @@
 import sqlite3
 import pandas as pd
+import random
 
-def csv_to_sqlite(daily_csv, weekly_csv, monthly_csv, daily_sales_csv, weekly_sales_csv, monthly_sales_csv):
+def csv_to_sqlite(daily_csv, daily_sales_csv):
     """
-    Save daily, weekly, and monthly CSV data into an SQLite database.
+    Save daily CSV data and daily sales CSV data into an SQLite database,
+    plus product_info, and create an inventory table (product_inventory).
     """
     with sqlite3.connect("database.db") as conn:
         cursor = conn.cursor()
@@ -20,7 +22,7 @@ def csv_to_sqlite(daily_csv, weekly_csv, monthly_csv, daily_sales_csv, weekly_sa
         )
         """)
 
-        # Create time-series data tables
+        # Create daily_data (판매수량)
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS daily_data (
             ID TEXT,
@@ -29,22 +31,8 @@ def csv_to_sqlite(daily_csv, weekly_csv, monthly_csv, daily_sales_csv, weekly_sa
             FOREIGN KEY (ID) REFERENCES product_info(ID)
         )
         """)
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS weekly_data (
-            ID TEXT,
-            week_start_date DATE,
-            value INTEGER,
-            FOREIGN KEY (ID) REFERENCES product_info(ID)
-        )
-        """)
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS monthly_data (
-            ID TEXT,
-            month_start_date DATE,
-            value INTEGER,
-            FOREIGN KEY (ID) REFERENCES product_info(ID)
-        )
-        """)
+
+        # Create daily_sales_data (판매금액)
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS daily_sales_data (
             ID TEXT,
@@ -53,18 +41,11 @@ def csv_to_sqlite(daily_csv, weekly_csv, monthly_csv, daily_sales_csv, weekly_sa
             FOREIGN KEY (ID) REFERENCES product_info(ID)
         )
         """)
+
+        # 재고 관리 테이블: product_inventory
         cursor.execute("""
-        CREATE TABLE IF NOT EXISTS weekly_sales_data (
+        CREATE TABLE IF NOT EXISTS product_inventory (
             ID TEXT,
-            week_start_date DATE,
-            value INTEGER,
-            FOREIGN KEY (ID) REFERENCES product_info(ID)
-        )
-        """)
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS monthly_sales_data (
-            ID TEXT,
-            month_start_date DATE,
             value INTEGER,
             FOREIGN KEY (ID) REFERENCES product_info(ID)
         )
@@ -76,57 +57,51 @@ def csv_to_sqlite(daily_csv, weekly_csv, monthly_csv, daily_sales_csv, weekly_sa
             for _, row in df.iterrows():
                 for date_col in date_cols:
                     if pd.notna(row[date_col]):
+                        # (ID, 'YYYY-MM-DD', value)
                         timeseries_data.append((row[id_col], date_col, row[date_col]))
             cursor.executemany(f"INSERT INTO {table_name} VALUES (?, ?, ?)", timeseries_data)
 
-        # Process daily data
+        ###################################################
+        # (1) Load 'daily.csv' => product_info + daily_data
+        ###################################################
         daily_df = pd.read_csv(daily_csv)
+
+        # product_info 채우기
         product_cols = ["ID", "제품", "대분류", "중분류", "소분류", "브랜드"]
         product_data = daily_df[product_cols].drop_duplicates().values.tolist()
         cursor.executemany("INSERT OR IGNORE INTO product_info VALUES (?, ?, ?, ?, ?, ?)", product_data)
+
+        # 일자 칼럼(202X-XX-XX 형태)
         date_cols = [col for col in daily_df.columns if col.startswith("202")]
         process_timeseries_data(daily_df, "ID", date_cols, "daily_data")
 
-        # Process weekly data
-        weekly_df = pd.read_csv(weekly_csv)
-        date_cols = [col for col in weekly_df.columns if "202" in col]
-        process_timeseries_data(weekly_df, "ID", date_cols, "weekly_data")
-
-        # Process monthly data
-        monthly_df = pd.read_csv(monthly_csv)
-        date_cols = [col for col in monthly_df.columns if "202" in col]
-        process_timeseries_data(monthly_df, "ID", date_cols, "monthly_data")
-
-        # Process daily sales data
+        ###################################################
+        # (2) Load 'daily_sales.csv' => daily_sales_data
+        ###################################################
         daily_sales_df = pd.read_csv(daily_sales_csv)
-        date_cols = [col for col in daily_sales_df.columns if col.startswith("202")]
-        process_timeseries_data(daily_sales_df, "ID", date_cols, "daily_sales_data")
+        date_cols_sales = [col for col in daily_sales_df.columns if col.startswith("202")]
+        process_timeseries_data(daily_sales_df, "ID", date_cols_sales, "daily_sales_data")
 
-        # Process weekly sales data
-        weekly_sales_df = pd.read_csv(weekly_sales_csv)
-        date_cols = [col for col in weekly_sales_df.columns if "202" in col]
-        process_timeseries_data(weekly_sales_df, "ID", date_cols, "weekly_sales_data")
+        ###################################################
+        # (3) product_inventory: 1~150000 랜덤값 삽입
+        ###################################################
+        cursor.execute("SELECT ID FROM product_info")
+        all_ids = [row[0] for row in cursor.fetchall()]
 
-        # Process monthly sales data
-        monthly_sales_df = pd.read_csv(monthly_sales_csv)
-        date_cols = [col for col in monthly_sales_df.columns if "202" in col]
-        process_timeseries_data(monthly_sales_df, "ID", date_cols, "monthly_sales_data")
+        inventory_data = []
+        for pid in all_ids:
+            rand_value = random.randint(1, 150000)  # 1~150000 사이 정수
+            inventory_data.append((pid, rand_value))
+
+        cursor.executemany("INSERT INTO product_inventory (ID, value) VALUES (?, ?)", inventory_data)
 
         # Commit changes
         conn.commit()
 
 
-# 판매량 데이터 파일 경로 지정
-daily_csv = "daily_sales_volume.csv"
-weekly_csv = "weekly_sales_volume.csv"
-monthly_csv = "monthly_sales_volume.csv"
-# 판매금액 데이터 파일 경로 지정
-daily_sales_csv = "daily_sales.csv"
-weekly_sales_csv = "weekly_sales.csv"
-monthly_sales_csv = "monthly_sales.csv"
+# CSV 파일 경로
+daily_csv = "trian.csv"
+daily_sales_csv = "sales.csv"
 
-# Call the function with provided files
-csv_to_sqlite(daily_csv, weekly_csv, monthly_csv,
-              daily_sales_csv, weekly_sales_csv, monthly_sales_csv)
-
-
+# 함수 호출
+csv_to_sqlite(daily_csv, daily_sales_csv)
