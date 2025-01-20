@@ -42,6 +42,7 @@ def csv_to_sqlite(daily_csv, daily_sales_csv):
         )
         """)
 
+
         # 재고 관리 테이블: product_inventory
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS product_inventory (
@@ -83,14 +84,16 @@ def csv_to_sqlite(daily_csv, daily_sales_csv):
         process_timeseries_data(daily_sales_df, "ID", date_cols_sales, "daily_sales_data")
 
         ###################################################
-        # (3) product_inventory: 1~150000 랜덤값 삽입
+        # (3) product_inventory: 100~50000 랜덤값 삽입
         ###################################################
         cursor.execute("SELECT ID FROM product_info")
         all_ids = [row[0] for row in cursor.fetchall()]
 
+        all_ids = sorted(all_ids, key=lambda x: int(x))
+
         inventory_data = []
         for pid in all_ids:
-            rand_value = random.randint(1, 150000)  # 1~150000 사이 정수
+            rand_value = random.randint(100, 50000)  # 20~1000 사이 정수
             inventory_data.append((pid, rand_value))
 
         cursor.executemany("INSERT INTO product_inventory (ID, value) VALUES (?, ?)", inventory_data)
@@ -100,7 +103,7 @@ def csv_to_sqlite(daily_csv, daily_sales_csv):
 
 
 # CSV 파일 경로
-daily_csv = "trian.csv"
+daily_csv = "train.csv"
 daily_sales_csv = "sales.csv"
 
 # 함수 호출
