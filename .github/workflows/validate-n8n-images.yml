@@ -1,9 +1,10 @@
 name: Validate N8N Workflow Images
 
 on:
+  push:
+    branches: [ main, deployment ]
   pull_request:
-    branches:
-      - main
+    branches: [ main, deployment ]
     paths:
       - '.github/workflows/n8n/**.json'
 
