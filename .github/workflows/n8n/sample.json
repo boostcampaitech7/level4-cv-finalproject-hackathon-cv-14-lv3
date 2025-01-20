@@ -1,0 +1,45 @@
+{
+  "name": "TEST",
+  "nodes": [
+    {
+      "parameters": {
+        "height": 731.7039821513649,
+        "width": 1910.7813046051347,
+        "color": 6
+      },
+      "id": "c6024a57-1957-4714-84e3-8d326c83cd89",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        380,
+        700
+      ],
+      "typeVersion": 1
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "n8n": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c12f65bb-2ed6-4313-b342-bd70351964fb",
+  "meta": {
+    "templateId": "1534",
+    "instanceId": "558d88703fb65b2d0e44613bc35916258b0f0bf983c5d4730c00c424b77ca36a"
+  },
+  "id": "jwKjxtMNhHfxdApT",
+  "tags": []
+}
