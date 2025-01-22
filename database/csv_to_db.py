@@ -1,7 +1,7 @@
 import pandas as pd
 import psycopg2
 from config import get_db_args
-from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT, AsIs
 from tqdm import tqdm
 
 
@@ -51,7 +51,8 @@ def csv_to_postgresql(csv_path: str, args) -> None:
             for _, row in tqdm(df.iterrows(), total=len(df)):
                 columns = ["ID"] + [f'"{date}"' for date in date_columns]
                 values = [row["ID"]] + [row[date] if pd.notna(row[date]) else None for date in date_columns]
-                cursor.execute(f"INSERT INTO time_series_data ({', '.join(columns)}) VALUES ({', '.join(['%s'] * len(values))})", values)
+                query = "INSERT INTO time_series_data (%s) VALUES %s"
+                cursor.execute(query, (AsIs(", ".join(columns)), tuple(values)))
 
             print("데이터베이스 변환이 완료되었습니다!")
 
