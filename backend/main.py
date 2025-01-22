@@ -18,7 +18,7 @@ app.add_middleware(
 )
 
 # 2) DB 연결 (SQLite)
-db_path = "D:/CV_Final_Hackarton/level4-cv-finalproject-hackathon-cv-14-lv3-1/database/database.db"
+db_path = "./database/database.db"
 engine = sqlalchemy.create_engine(f"sqlite:///{db_path}")
 
 # ===== 데이터 로딩 =====
@@ -103,20 +103,19 @@ else:
 # 카테고리별(대분류) 매출
 df_category = df_sales.groupby('대분류', as_index=False)['매출액'].sum()
 
-# 재고수량 및 월판매수량
-data_quantity['월'] = data_quantity['날짜'].dt.to_period('M').astype(str)
-monthly_sales_quantity = data_quantity.groupby(['ID', '월'], as_index=False)['판매수량'].sum()
-last_month = monthly_sales_quantity['월'].max()
+# 재고수량 및 일일판매수량
+data_quantity['날짜'] = pd.to_datetime(data_quantity['date'])
+last_date = data_quantity['날짜'].max()
 
-if last_month:
-    monthly_sales_quantity_last = monthly_sales_quantity[monthly_sales_quantity['월'] == last_month][['ID', '판매수량']]
-    monthly_sales_quantity_last = monthly_sales_quantity_last.rename(columns={'판매수량': '월판매수량'})
+if last_date:
+    daily_sales_quantity_last = data_quantity[data_quantity['날짜'] == last_date][['ID', '판매수량']]
+    daily_sales_quantity_last = daily_sales_quantity_last.rename(columns={'판매수량': '일판매수량'})
 else:
-    monthly_sales_quantity_last = pd.DataFrame(columns=['ID', '월판매수량'])
+    daily_sales_quantity_last = pd.DataFrame(columns=['ID', '일판매수량'])
 
-merged_df = pd.merge(inventory_df, monthly_sales_quantity_last, on='ID', how='left')
-merged_df['월판매수량'] = merged_df['월판매수량'].fillna(0)
-merged_df['남은 재고'] = merged_df['재고수량'] - merged_df['월판매수량']
+merged_df = pd.merge(inventory_df, daily_sales_quantity_last, on='ID', how='left')
+merged_df['일판매수량'] = merged_df['일판매수량'].fillna(0)
+merged_df['남은 재고'] = merged_df['재고수량'] - merged_df['일판매수량']
 low_stock_df = merged_df[merged_df['남은 재고'] <= 20]
 
 # 매출 상승폭(소분류)
@@ -135,7 +134,7 @@ if len(all_dates) >= 2:
 else:
     rise_rate = 0
 
-subcat_list = pivot_subcat.sum(axis=1).sort_values(ascending=False).head(6).index.tolist()
+subcat_list = pivot_subcat.sum(axis=1).sort_values(ascending=False).head(10).index.tolist()
 
 
 # ---------- (추가) 상위/하위 10개 계산 ----------
