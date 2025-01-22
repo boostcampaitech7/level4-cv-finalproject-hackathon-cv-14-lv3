@@ -18,7 +18,7 @@ app.add_middleware(
 )
 
 # 2) DB 연결 (SQLite)
-db_path = "D:/CV_Final_Hackarton/level4-cv-finalproject-hackathon-cv-14-lv3-1/database/database.db"
+db_path = "/database.db"
 engine = sqlalchemy.create_engine(f"sqlite:///{db_path}")
 
 # ===== 데이터 로딩 =====
