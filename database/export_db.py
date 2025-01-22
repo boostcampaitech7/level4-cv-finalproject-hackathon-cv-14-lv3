@@ -4,6 +4,8 @@ import pandas as pd
 from config import get_db_args
 from sqlalchemy import create_engine
 
+""" PostgreSQL 데이터를 SQLite로 추출합니다. """
+
 
 def export_to_sqlite():
     """PostgreSQL 데이터를 SQLite로 추출"""
