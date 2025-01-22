@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import Plot from 'react-plotly.js';
 
@@ -41,22 +41,22 @@ const ROW_STYLE = {
 };
 
 const GRAPH_STYLE = {
-  margin: "10px",
-  padding: "10px",
+  margin: "20px",
+  padding: "20px",
   backgroundColor: "#ffffff",
   borderRadius: "10px",
   boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.1)"
 };
 const SECTION_STYLE = {
-  backgroundColor: "white",
-  borderRadius: "10px",
-  boxShadow: "0px 4px 6px rgba(0, 0, 0, 0.1)",
-  padding: "10px",
-  marginBottom: "10px",
-  border: "1px solid #e0e0e0",
-  width: "45%",
-  display: "inline-block",
-  verticalAlign: "top"
+  backgroundColor: "white",  
+  borderRadius: "15px",  
+  boxShadow: "0px 4px 6px rgba(0, 0, 0, 0.1)",  
+  padding: "20px",  
+  marginBottom: "20px",  
+  border: "1px solid #e0e0e0",  
+  width: '48%',
+  display: 'inline-block',
+  verticalAlign: 'top'
 };
 const KPI_ALL_STYLE = {
   marginTop: "20px",
@@ -127,6 +127,108 @@ function formatCurrency(value) {
 ////////////////////////////////////////
 // 2) 메인 컴포넌트
 ////////////////////////////////////////
+
+// AnimatedGraph 컴포넌트 분리
+const AnimatedGraph = ({ trace, title }) => {
+  const graphRef = useRef(null);
+  const [isVisible, setIsVisible] = useState(false);
+  const [animatedData, setAnimatedData] = useState(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+        }
+      },
+      { threshold: 0.3 }
+    );
+
+    if (graphRef.current) {
+      observer.observe(graphRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (isVisible && trace) {
+      const startData = {
+        ...trace,
+        x: trace.x.map(() => Math.random() * Math.max(...trace.x))
+      };
+
+      setAnimatedData(startData);
+
+      const duration = 1500;
+      const steps = 30;
+      const interval = duration / steps;
+      let step = 0;
+
+      const animation = setInterval(() => {
+        step++;
+        const progress = step / steps;
+        
+        const newData = {
+          ...trace,
+          x: trace.x.map((targetValue, i) => {
+            const startValue = startData.x[i];
+            return startValue + (targetValue - startValue) * progress;
+          })
+        };
+
+        setAnimatedData(newData);
+
+        if (step >= steps) {
+          clearInterval(animation);
+          setAnimatedData(trace);
+        }
+      }, interval);
+
+      return () => clearInterval(animation);
+    }
+  }, [isVisible, trace]);
+
+  return (
+    <div
+      ref={graphRef}
+      style={{
+        ...SECTION_STYLE,
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        opacity: isVisible ? 1 : 0,
+        transition: 'opacity 0.5s ease-in'
+      }}
+    >
+      <Plot
+        data={[animatedData || trace]}
+        layout={{
+          title: {
+            text: title,
+            font: { size: 18, color: '#333', family: "Arial, sans-serif", weight: "bold" }
+          },
+          xaxis: { 
+            title: {
+              text: "매출액",
+              font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
+            }
+          },
+          yaxis: {
+            title: {
+              text: "ID",
+              font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
+            },
+            type: "category"
+          },
+          title_x: 0.5,
+          height: 600,
+          margin: { l: 50, r: 50, t: 200, b: 100 }
+        }}
+      />
+    </div>
+  );
+};
 
 function App() {
   // KPI & 데이터
@@ -233,7 +335,7 @@ function App() {
   ];
 
   ////////////////////////////////////////
-  // 상/하위 10: Y축에 “그 10개 ID”만
+  // 상/하위 10: Y축에 "그 10개 ID"만
   ////////////////////////////////////////
   // 1) 상위 10: 내림차순 정렬 → slice(0,10)
   // 2) 하위 10: 오름차순 정렬 → slice(0,10)
@@ -256,8 +358,8 @@ function App() {
   // 색상 할당
   // 상위 10: index 0(가장 큰) -> reds[0], index 9(작은) -> reds[9]
   // 하위 10: index 9(가장 큰 among bottom) -> blues[0], etc
-  // 아래는 “가장 큰 값이 맨 위”로 표시하기 위해 reverse를 적용할 수도 있음
-  // 여기서는 단순히 “내림차순 => reds, 오름차순 => blues”만 하되,
+  // 아래는 "가장 큰 값이 맨 위"로 표시하기 위해 reverse를 적용할 수도 있음
+  // 여기서는 단순히 "내림차순 => reds, 오름차순 => blues"만 하되,
   // yaxis에 딱 그 10개 ID만 준다.
   const len = reds.length;
   const topIDs = sortedTop10.map(item => item.ID);   // 10개
@@ -300,7 +402,7 @@ function App() {
     ? `${lastMonthCol} 월 매출 하위 10개 ID`
     : "하위 10개";
 
-  // “급상승 품목”
+  // "급상승 품목"
   const itemStyle = {
     width: "200px",
     height: "100px",
@@ -310,11 +412,49 @@ function App() {
     fontSize: "14px",
     fontWeight: "bold",
     color: "#fff",
-    backgroundColor: "#FF7F50",
-    borderRadius: "10px",
-    boxShadow: "0 8px 25px rgba(0,0,0,0.2)",
-    marginRight: "15px"
+    background: "linear-gradient(135deg, #FF6B6B 0%, #FFA07A 100%)",
+    borderRadius: "15px",
+    boxShadow: `
+      0 20px 25px -5px rgba(255, 107, 107, 0.35),  // 메인 외부 그림자 강화
+      0 15px 15px -8px rgba(255, 160, 122, 0.25),  // 두 번째 외부 그림자 강화
+      0 8px 12px rgba(0, 0, 0, 0.15),              // 바닥 그림자 추가
+      inset 0 -4px 8px rgba(0,0,0,0.2),            // 하단 내부 그림자 강화
+      inset 0 4px 8px rgba(255,255,255,0.3),       // 상단 하이라이트 강화
+      inset 2px 0 4px rgba(255,255,255,0.1),       // 우측 내부 하이라이트
+      inset -2px 0 4px rgba(0,0,0,0.1)             // 좌측 내부 그림자
+    `,
+    transform: `
+      translateY(-4px)        // 더 많이 띄움
+      perspective(1000px)     // 3D 효과를 위한 원근감
+      rotateX(2deg)          // X축 회전
+    `,
+    border: "1px solid rgba(255,255,255,0.3)",  // 테두리 더 밝게
+    transition: "all 0.3s ease",
+    marginRight: "15px",
+    textShadow: "0 2px 4px rgba(0,0,0,0.2)",
+    position: "relative",
+    overflow: "hidden",
+    backfaceVisibility: "hidden",  // 3D 변환 시 뒷면 숨김
+    transformStyle: "preserve-3d"  // 3D 공간에서의 변환 유지
   };
+
+  // 스타일 시트에 애니메이션 추가
+  const styles = `
+    @keyframes shine {
+      0% {
+        left: -100%;
+      }
+      20% {
+        left: 100%;
+      }
+      100% {
+        left: 100%;
+      }
+    }
+  `;
+
+  // App 컴포넌트 내에 스타일 시트 추가
+  document.head.appendChild(document.createElement('style')).textContent = styles;
 
   return (
     <div style={PAGE_STYLE}>
@@ -370,41 +510,137 @@ function App() {
       {/* 일간/주간/월간 그래프 */}
       <div style={ROW_STYLE}>
         <div style={GRAPH_STYLE}>
+          <div style={{
+            width: "100%",
+            backgroundColor: "#f8f9fa",
+            padding: "15px 0 20px 0",
+            marginBottom: "20px",
+            borderTopLeftRadius: "8px",
+            borderTopRightRadius: "8px"
+          }}>
+            <h3 style={{
+              textAlign: "center",
+              margin: 0,
+              fontSize: "18px",
+              fontWeight: "bold",
+              color: "#333",
+              fontFamily: "Arial, sans-serif"
+            }}>일간 데이터</h3>
+          </div>
           <Plot
-            data={[dailyTrace]}
+            data={[{
+              ...dailyTrace,
+              fill: 'tozeroy',
+              fillcolor: 'rgba(64, 181, 246, 0.1)',
+              line: { color: 'rgb(64, 181, 246)' }
+            }]}
             layout={{
-              title: "일간 데이터",
-              xaxis: { title: "날짜" },
-              yaxis: { title: "매출", type: "linear" },
-              title_x: 0.5,
+              xaxis: { 
+                title: {
+                  text: "일간",
+                  font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
+                }
+              },
+              yaxis: { 
+                title: {
+                  text: "매출",
+                  font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
+                },
+                type: "linear"
+              },
               width: 600,
-              height: 400
+              height: 380,
+              margin: { t: 20, r: 30, l: 60, b: 40 }
             }}
           />
         </div>
         <div style={GRAPH_STYLE}>
+          <div style={{
+            width: "100%",
+            backgroundColor: "#f8f9fa",
+            padding: "15px 0 20px 0",
+            marginBottom: "20px",
+            borderTopLeftRadius: "8px",
+            borderTopRightRadius: "8px"
+          }}>
+            <h3 style={{
+              textAlign: "center",
+              margin: 0,
+              fontSize: "18px",
+              fontWeight: "bold",
+              color: "#333",
+              fontFamily: "Arial, sans-serif"
+            }}>주간 데이터</h3>
+          </div>
           <Plot
-            data={[weeklyTrace]}
+            data={[{
+              ...weeklyTrace,
+              fill: 'tozeroy',
+              fillcolor: 'rgba(129, 199, 132, 0.1)',
+              line: { color: 'rgb(129, 199, 132)' }
+            }]}
             layout={{
-              title: "주간 데이터",
-              xaxis: { title: "주간" },
-              yaxis: { title: "매출", type: "linear" },
-              title_x: 0.5,
+              xaxis: { 
+                title: {
+                  text: "주간",
+                  font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
+                }
+              },
+              yaxis: { 
+                title: {
+                  text: "매출",
+                  font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
+                },
+                type: "linear"
+              },
               width: 600,
-              height: 400
+              height: 380,
+              margin: { t: 20, r: 30, l: 60, b: 40 }
             }}
           />
         </div>
         <div style={GRAPH_STYLE}>
+          <div style={{
+            width: "100%",
+            backgroundColor: "#f8f9fa",
+            padding: "15px 0 20px 0",
+            marginBottom: "20px",
+            borderTopLeftRadius: "8px",
+            borderTopRightRadius: "8px"
+          }}>
+            <h3 style={{
+              textAlign: "center",
+              margin: 0,
+              fontSize: "18px",
+              fontWeight: "bold",
+              color: "#333",
+              fontFamily: "Arial, sans-serif"
+            }}>월간 데이터</h3>
+          </div>
           <Plot
-            data={[monthlyTrace]}
+            data={[{
+              ...monthlyTrace,
+              fill: 'tozeroy',
+              fillcolor: 'rgba(186, 104, 200, 0.1)',
+              line: { color: 'rgb(186, 104, 200)' }
+            }]}
             layout={{
-              title: "월간 데이터",
-              xaxis: { title: "월간" },
-              yaxis: { title: "매출", type: "linear" },
-              title_x: 0.5,
+              xaxis: { 
+                title: {
+                  text: "월간",
+                  font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
+                }
+              },
+              yaxis: { 
+                title: {
+                  text: "매출",
+                  font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
+                },
+                type: "linear"
+              },
               width: 600,
-              height: 400
+              height: 380,
+              margin: { t: 20, r: 30, l: 60, b: 40 }
             }}
           />
         </div>
@@ -412,56 +648,159 @@ function App() {
 
       {/* 급상승 품목 */}
       <div style={KPI_ALL_STYLE}>
-        <h2 style={TITLE_STYLE}>매출 급상승 품목 ⚡</h2>
+        <h2 style={TITLE_STYLE}>
+          매출 급상승 품목 
+          <svg 
+            style={{
+              width: "24px",
+              height: "24px",
+              marginLeft: "8px",
+              verticalAlign: "middle"
+            }}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#FF6B6B"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M23 6L13.5 15.5L8.5 10.5L1 18" />
+            <polyline points="17 6 23 6 23 12" />
+          </svg>
+        </h2>
         <div style={{
           display: "flex",
           flexDirection: "row",
           overflow: "hidden",
-          width: "70%",
+          width: "1350px",
           margin: "auto",
-          justifyContent: "center"
+          justifyContent: "center",
+          position: "relative",
+          padding: "20px 0",
+          // 더 연한 회색으로 변경
+          background: "linear-gradient(to right, rgba(244, 246, 248, 0.6), rgba(244, 246, 248, 0.4))",
+          borderRadius: "25px",
+          boxShadow: "inset 0 0 15px rgba(244, 246, 248, 0.8)",
+          border: "1px solid rgba(244, 246, 248, 0.8)"
         }}>
-          {rising.subcat_list.map((subcat, idx) => (
-            <div key={idx} style={{ ...itemStyle, margin: "5px 10px" }}>
-              {subcat}
-            </div>
-          ))}
+          {/* 왼쪽 페이드 효과 */}
+          <div style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            width: "100px",
+            height: "100%",
+            background: "linear-gradient(to right, rgba(255,255,255,1), rgba(255,255,255,0))",
+            zIndex: 1
+          }} />
+          
+          {/* 오른쪽 페이드 효과 */}
+          <div style={{
+            position: "absolute",
+            right: 0,
+            top: 0,
+            width: "100px",
+            height: "100%",
+            background: "linear-gradient(to left, rgba(255,255,255,1), rgba(255,255,255,0))",
+            zIndex: 1
+          }} />
+
+          <div style={{
+            display: "flex",
+            animation: "slide 30s linear infinite",  // 시간 증가
+            whiteSpace: "nowrap"
+          }}>
+            {/* 아이템을 3번 반복하여 더 자연스러운 루프 생성 */}
+            {[...rising.subcat_list, ...rising.subcat_list, ...rising.subcat_list].map((subcat, idx) => (
+              <div 
+                key={idx} 
+                style={{
+                  ...itemStyle,
+                  margin: "5px 10px"
+                }}
+              >
+                {subcat}
+              </div>
+            ))}
+          </div>
+          <style>
+            {`
+              @keyframes slide {
+                0% {
+                  transform: translateX(0);
+                }
+                100% {
+                  transform: translateX(calc(-225px * ${rising.subcat_list.length}));
+                }
+              }
+            `}
+          </style>
         </div>
       </div>
 
       {/* 상위/하위 10개 */}
       <div style={ROW_STYLE}>
-        <div style={SECTION_STYLE}>
+        <div style={{
+          ...SECTION_STYLE,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
           <Plot
             data={[top10Trace]}
             layout={{
-              title: topTitle,
-              xaxis: { title: "매출액" },
-              yaxis: {
-                title: "ID",
-                type: "category"  // 카테고리축
+              title: {
+                text: topTitle,
+                font: { size: 18, color: '#333', family: "Arial, sans-serif", weight: "bold" }
               },
-              title_x: 0.5,
-              width: 500,
-              height: 400,
-              margin: { l: 40, r: 40, t: 70, b: 50 }
-            }}
-          />
-        </div>
-        <div style={SECTION_STYLE}>
-          <Plot
-            data={[bottom10Trace]}
-            layout={{
-              title: bottomTitle,
-              xaxis: { title: "매출액" },
+              xaxis: { 
+                title: {
+                  text: "매출액",
+                  font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
+                }
+              },
               yaxis: {
-                title: "ID",
+                title: {
+                  text: "ID",
+                  font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
+                },
                 type: "category"
               },
               title_x: 0.5,
-              width: 500,
-              height: 400,
-              margin: { l: 40, r: 40, t: 70, b: 50 }
+              height: 600,
+              margin: { l: 50, r: 50, t: 200, b: 100 }
+            }}
+          />
+        </div>
+        <div style={{
+          ...SECTION_STYLE,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          <Plot
+            data={[bottom10Trace]}
+            layout={{
+              title: {
+                text: bottomTitle,
+                font: { size: 18, color: '#333', family: "Arial, sans-serif", weight: "bold" }
+              },
+              xaxis: { 
+                title: {
+                  text: "매출액",
+                  font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
+                }
+              },
+              yaxis: {
+                title: {
+                  text: "ID",
+                  font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
+                },
+                type: "category"
+              },
+              title_x: 0.5,
+              height: 600,
+              margin: { l: 50, r: 50, t: 200, b: 100 }
             }}
           />
         </div>
@@ -513,26 +852,63 @@ function App() {
       <div style={ROW_STYLE}>
         <div style={{
           ...SECTION_STYLE,
-          width: "45%",
+          width: "38%",
           height: "400px",
           display: "flex",
-          flexDirection: "column",     // 위아래로 정렬
-          justifyContent: "center",    // 수직 가운데 정렬
-          alignItems: "center"         // 수평 가운데 정렬
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center"
         }}>
           <h2 style={{ textAlign: "center", fontWeight: "bold" }}>카테고리별 매출 파이차트</h2>
           <Plot
-            data={pieData}
+            data={[{
+              ...pieData[0],
+              hole: 0.4,
+              pull: pieData[0].values.map((val, idx) => 
+                idx === pieData[0].values.indexOf(Math.max(...pieData[0].values)) ? 0.1 : 0
+              ),
+              marker: {
+                colors: [
+                  '#FF8C7C',  // 코랄 핑크
+                  '#FFB088',  // 피치
+                  '#FFC988',  // 파스텔 오렌지
+                  '#FFD7A8',  // 살구색
+                  '#FFAC7F'   // 연한 테라코타
+                ]
+              },
+              type: 'pie',
+              shadow: 0.5,
+              scalegroup: 1
+            }]}
             layout={{
-              title: "대분류별 매출 비중",
+              title: {
+                text: "대분류별 매출 비중",
+                font: { size: 18, color: '#333', family: "Arial, sans-serif", weight: "bold" }
+              },
               width: 450,
-              height: 350
+              height: 350,
+              showlegend: true,
+              legend: {
+                orientation: "v",
+                xanchor: "left",
+                yanchor: "middle",
+                x: 1.2,        // 범례를 오른쪽으로 더 멀리
+                y: 0.5         // 범례를 중앙에 위치
+              },
+              margin: { l: 50, r: 200, t: 80, b: 50 },  // 오른쪽 여백 증가
+              paper_bgcolor: 'rgba(0,0,0,0)',
+              plot_bgcolor: 'rgba(0,0,0,0)',
+              scene: {
+                camera: {
+                  eye: { x: 2, y: 2, z: 2 }  // 3D 시점
+                }
+              }
             }}
           />
         </div>
         <div style={{
           ...SECTION_STYLE,
-          width: "45%",
+          width: "58%",
           overflowY: "auto",
           height: "400px"
         }}>
@@ -543,7 +919,7 @@ function App() {
                 <th style={{ border: "1px solid #ccc" }}>ID</th>
                 <th style={{ border: "1px solid #ccc" }}>상품명</th>
                 <th style={{ border: "1px solid #ccc" }}>재고수량</th>
-                <th style={{ border: "1px solid #ccc" }}>월판매수량</th>
+                <th style={{ border: "1px solid #ccc" }}>일판매수량</th>
                 <th style={{ border: "1px solid #ccc" }}>남은 재고</th>
               </tr>
             </thead>
@@ -553,7 +929,7 @@ function App() {
                   <td style={{ border: "1px solid #ccc" }}>{item.ID}</td>
                   <td style={{ border: "1px solid #ccc" }}>{item.product}</td>
                   <td style={{ border: "1px solid #ccc" }}>{item.재고수량}</td>
-                  <td style={{ border: "1px solid #ccc" }}>{item.월판매수량}</td>
+                  <td style={{ border: "1px solid #ccc" }}>{item.일판매수량}</td>
                   <td style={{ border: "1px solid #ccc" }}>{item["남은 재고"]}</td>
                 </tr>
               ))}
