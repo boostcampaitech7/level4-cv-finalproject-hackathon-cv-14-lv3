@@ -43,7 +43,7 @@ listen_addresses = '*' # 이 내용을 파일에 추가해주세요
 ### Step 4. n8n에 PostgreSQL 연결하기
 n8n에서 PostgreSQL을 활용하기 위해서는 `PostgreSQL node`를 활용합니다. 아래의 이미지를 참고하여 설정해주세요.
 
-![n8n_postgre](https://github.com/boostcampaitech7/level4-cv-finalproject-hackathon-cv-14-lv3/tree/main/src/postgre_result.png)
+![n8n_postgre](https://github.com/boostcampaitech7/level4-cv-finalproject-hackathon-cv-14-lv3/tree/main/src/n8n_postgre.png)
 
 
 ## 데이터베이스 구조
