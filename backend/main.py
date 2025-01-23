@@ -18,7 +18,7 @@ app.add_middleware(
 )
 
 # 2) DB 연결 (SQLite)
-db_path = "./database/database.db"
+db_path = "../database/database.db"
 engine = sqlalchemy.create_engine(f"sqlite:///{db_path}")
 
 # ===== 데이터 로딩 =====
@@ -52,6 +52,7 @@ FROM product_inventory inv
 JOIN product_info p ON inv.ID = p.ID
 """
 inventory_df = pd.read_sql(inventory_sql, con=engine)
+inventory_df = inventory_df.rename(columns={'id': 'ID'})
 
 # 문자열 변환
 df_sales['date'] = df_sales['date'].astype(str)
