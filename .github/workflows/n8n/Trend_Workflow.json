@@ -1,0 +1,158 @@
+{
+  "name": "Trend-Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "c055762a-8fe7-4141-a639-df2372f30060",
+      "typeVersion": 1.1,
+      "name": "Workflow Input Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        80,
+        680
+      ]
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.query }} {{ $json.chatInput }}",
+        "schemaType": "manual",
+        "inputSchema": "{\n \"type\": \"object\",\n \"properties\": {\n   \"startDate\": {\n     \"type\": \"string\",\n     \"description\": \"조회 시작 날짜 (YYYY-MM-DD 형식, 2016-01-01부터 가능)\"\n   },\n   \"endDate\": {\n     \"type\": \"string\", \n     \"description\": \"조회 종료 날짜 (YYYY-MM-DD 형식)\"\n   },\n   \"timeUnit\": {\n     \"type\": \"string\",\n     \"enum\": [\"date\", \"week\", \"month\"],\n     \"default\": \"month\",\n     \"description\": \"조회 구간 단위 (date: 일간, week: 주간, month: 월간)\"\n   },\n   \"keywordGroups\": {\n     \"type\": \"array\",\n     \"maxItems\": 5,\n     \"items\": {\n       \"type\": \"object\",\n       \"properties\": {\n         \"groupName\": {\n           \"type\": \"string\",\n           \"description\": \"주제어 그룹명\"\n         },\n         \"keywords\": {\n           \"type\": \"array\",\n           \"maxItems\": 20,\n           \"items\": {\n             \"type\": \"string\"\n           },\n           \"description\": \"검색어 목록\"\n         }\n       },\n       \"required\": [\"groupName\", \"keywords\"]\n     },\n     \"description\": \"검색어 그룹 (최대 5개)\"\n   },\n   \"device\": {\n     \"type\": \"string\",\n     \"enum\": [\"\", \"pc\", \"mo\"],\n     \"default\": \"\",\n     \"description\": \"검색 환경 (pc: PC, mo: 모바일, 빈값: 전체)\"\n   },\n   \"gender\": {\n     \"type\": \"string\", \n     \"enum\": [\"\", \"m\", \"f\"],\n     \"default\": \"\",\n     \"description\": \"성별 (m: 남성, f: 여성, 빈값: 전체)\"\n   },\n   \"ages\": {\n     \"type\": \"array\",\n     \"items\": {\n       \"type\": \"string\",\n       \"enum\": [\"1\", \"2\", \"3\", \"4\", \"5\", \"6\", \"7\", \"8\", \"9\", \"10\", \"11\"]\n     },\n     \"default\": [],\n     \"description\": \"연령대 (1: 0-12세, 2: 13-18세, ... 11: 60세 이상, 빈배열: 전체)\"\n   }\n },\n \"required\": [\"startDate\", \"endDate\", \"timeUnit\", \"keywordGroups\"]\n}",
+        "options": {
+          "systemPromptTemplate": "You analyze Korean search trend queries and generate structured data for Naver DataLab API.\n\nKey Functions:\n1. Date Processing:\n- Parse year/month/season from query\n- Set date range in YYYY-MM-DD format\n- For historical trends: Include multiple past years' data\n- Default to previous year if unspecified\n\n2. Keyword Group Generation:\n- Create 1-5 logical groups based on query topic\n- Each group needs:\n * groupName: Category or theme\n * keywords: 1-20 related terms\n- For retail/product queries:\n * Group by product categories\n * Include popular brands/variations\n * Consider seasonal trends\n\n3. Target Audience Processing:\n- Extract age groups (convert to [\"1\"-\"11\"])\n- Parse gender preferences\n- Identify device preferences\n\nImportant:\n- All numeric values as strings\n- Dates from 2016-01-01\n- Include relevant audience targeting\n- Group keywords logically"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1,
+      "position": [
+        340,
+        680
+      ],
+      "id": "0d35cc06-7537-4fd7-aca9-7daa18fc7bdd",
+      "name": "Information Extractor",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://openapi.naver.com/v1/datalab/search",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\n  \"X-Naver-Client-Id\": \"Your-ID\",\n  \"X-Naver-Client-Secret\": \"Your-Secret\",\n  \"Content-Type\": \"application/json\"\n}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.output }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        680
+      ],
+      "id": "df9079d7-b755-4084-9086-cbaa723da962",
+      "name": "Naver Datalab API Request"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "results",
+        "include": "allOtherFields",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        920,
+        680
+      ],
+      "id": "2abd9326-bf7c-4075-bb5c-cc0adf494061",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "solar-pro",
+          "mode": "id"
+        },
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        360,
+        860
+      ],
+      "id": "87cb4686-6c3a-4f27-82ec-53aa788460db",
+      "name": "Solar Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "1NzrEJLMzjNtK0g8",
+          "name": "OpenAi account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Workflow Input Trigger": {
+      "main": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Naver Datalab API Request": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Information Extractor": {
+      "main": [
+        [
+          {
+            "node": "Naver Datalab API Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Solar Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "8d481f67-051c-4dcd-acfb-7f8f16d1ff9a",
+  "meta": {
+    "templateId": "VMiAxXa3lCAizGB5f7dVZQSFfg3FtHkdTKvLuupqBls=",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2bf14225034dfb2d8498032d805718ab7af6ff6458c61a42e219515f095f1c9f"
+  },
+  "id": "bkhEAuk5y5qpaYb9",
+  "tags": []
+}
