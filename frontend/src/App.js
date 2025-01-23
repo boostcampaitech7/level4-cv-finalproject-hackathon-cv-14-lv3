@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import Plot from 'react-plotly.js';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import ChatPage from './ChatPage';
 
 ////////////////////////////////////////
 // 1) 스타일 상수 (질문 코드 그대로 유지)
@@ -457,8 +459,25 @@ function App() {
   document.head.appendChild(document.createElement('style')).textContent = styles;
 
   return (
+    <Router>
+      <Routes>
+        <Route path="/" element={
     <div style={PAGE_STYLE}>
       <h1 style={TITLE_STYLE}>데이터 대시보드</h1>
+
+      {/* Add chat Link */}
+      <div style={{textAlign: 'center', marginBottom: '20px'}}>
+              <Link to="/chat" style={{
+                padding: '10px 20px',
+                backgroundColor: '#007bff',
+                color: 'white',
+                textDecoration: 'none',
+                borderRadius: '5px',
+                fontWeight: 'bold'
+              }}>
+                AI 챗봇 상담 바로가기
+              </Link>
+            </div>
 
       {/* KPI 카드 */}
       <div style={ROW_STYLE}>
@@ -937,7 +956,10 @@ function App() {
           </table>
         </div>
       </div>
-    </div>
+    </div> } />
+    <Route path="/chat" element={<ChatPage />} />
+      </Routes>
+    </Router>
   );
 }
 
