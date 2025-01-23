@@ -1,0 +1,309 @@
+{
+  "name": "Recall product searching agent",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "e279af43-b003-4499-b221-58716e735379",
+      "name": "On new manual Chat Message",
+      "type": "@n8n/n8n-nodes-langchain.manualChatTrigger",
+      "position": [
+        360,
+        -3500
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "### Conversation history",
+        "height": 185,
+        "width": 300
+      },
+      "id": "9842074c-bc15-432c-86b8-096ceac2f9e1",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        400,
+        -3220
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {},
+      "id": "7a8e51f8-9c6f-4d38-8f51-a138c31fb8ac",
+      "name": "Wikipedia1",
+      "type": "@n8n/n8n-nodes-langchain.toolWikipedia",
+      "position": [
+        760,
+        -3140
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "### Tools for web searching",
+        "height": 185,
+        "width": 300
+      },
+      "id": "662ffc4c-8f05-42aa-a974-0f2769518e9b",
+      "name": "Sticky Note5",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        720,
+        -3220
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "### Web Searching Agent",
+        "height": 211,
+        "width": 422
+      },
+      "id": "e265d488-c975-4deb-ab04-2769dd158ee4",
+      "name": "Sticky Note7",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        540,
+        -3580
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "b87ce726-8a1f-4a89-a341-cf8900f41697",
+      "name": "SerpAPI1",
+      "type": "@n8n/n8n-nodes-langchain.toolSerpApi",
+      "position": [
+        900,
+        -3140
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "serpApi": {
+          "id": "2Ed1aJvhOoptx47f",
+          "name": "SerpAPI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "2025년 건강 상의 이유로 리콜된 상품에 대해서 알고 싶습니다. 구체적인 상품명과 그 이유에 대해서 한국어로 설명해주세요.",
+        "options": {}
+      },
+      "id": "996737eb-b8dd-4578-9c6a-07636bf08abe",
+      "name": "AI Agent1",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        620,
+        -3500
+      ],
+      "typeVersion": 1.6,
+      "alwaysOutputData": true,
+      "retryOnFail": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "model": "gpt-3.5-turbo-16k",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.1,
+      "position": [
+        1060,
+        -3340
+      ],
+      "id": "d928eea7-cd27-4867-9ca1-3758f46b6c82",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "dQ3yX9jdP7Yo2Xi1",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "text": "=Extract  {{ $json.output }}",
+        "attributes": {
+          "attributes": [
+            {
+              "name": "리콜 상품",
+              "description": "어떤 상품이 리콜되었나요?",
+              "required": true
+            },
+            {
+              "name": "판정 기관",
+              "description": "어떤 기관에서 리콜 상품으로 분류했나요?",
+              "required": true
+            },
+            {
+              "name": "리콜 원인",
+              "description": "어떤 이유로 상품이 리콜되었나요?"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        -3600
+      ],
+      "id": "3f63e40f-1fe7-47bd-9791-c266f7d1da85",
+      "name": "Information Extractor1"
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 10
+      },
+      "id": "7298f0ca-4ecd-4df6-8a10-4eb6ece902db",
+      "name": "Window Buffer Memory1",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "position": [
+        500,
+        -3140
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "table": {
+          "__rl": true,
+          "value": "={{ $json.output }}",
+          "mode": "name"
+        },
+        "dataMode": "defineBelow",
+        "valuesToSend": {
+          "values": [
+            {
+              "value": "리콜 상품"
+            },
+            {
+              "value": "판정 기관"
+            },
+            {
+              "value": "리콜 원인"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1580,
+        -3600
+      ],
+      "id": "8238cd7e-85c0-477a-8f17-610cf9f31185",
+      "name": "MySQL",
+      "credentials": {
+        "mySql": {
+          "id": "K3tKxNjT6O2Pbmgf",
+          "name": "MySQL account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On new manual Chat Message": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wikipedia1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SerpAPI1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Information Extractor1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Information Extractor1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Information Extractor1": {
+      "main": [
+        [
+          {
+            "node": "MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1c5dbcb9-7c5b-4b27-b9ed-26969f9d41a0",
+  "meta": {
+    "templateId": "1959",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "558d88703fb65b2d0e44613bc35916258b0f0bf983c5d4730c00c424b77ca36a"
+  },
+  "id": "q7WCYGvVjSXwk3IZ",
+  "tags": []
+}

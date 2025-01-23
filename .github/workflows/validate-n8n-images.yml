@@ -1,0 +1,62 @@
+name: Validate N8N Workflow Images
+
+on:
+  push:
+    branches: [ main, deployment ]
+  pull_request:
+    branches: [ main, deployment ]
+    paths:
+      - '.github/workflows/n8n/**.json'
+
+# 중요: PR 체크에 이 워크플로우를 포함하기 위한 설정
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-images:
+    runs-on: ubuntu-latest
+    # 중요: PR 체크에 이 결과가 반영되도록 설정
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for matching image files
+        id: check-images
+        run: |
+          # Find all JSON files in the n8n directory
+          json_files=$(find .github/workflows/n8n -name "*.json")
+
+          # Initialize error flag
+          error=0
+          missing_files=""
+
+          # Check each JSON file
+          for json_file in $json_files; do
+            # Get the corresponding PNG file path
+            png_file="${json_file%.json}.png"
+
+            # Check if PNG exists
+            if [ ! -f "$png_file" ]; then
+              error=1
+              missing_files="$missing_files\n- ${png_file#.github/workflows/n8n/}"
+            fi
+          done
+
+          # Set output
+          if [ $error -eq 1 ]; then
+            echo "Missing image files:$missing_files"
+            echo "status=failed" >> $GITHUB_OUTPUT
+          else
+            echo "status=success" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Fail if images are missing
+        if: steps.check-images.outputs.status == 'failed'
+        run: |
+          echo "Error: Some workflow JSON files are missing their corresponding PNG files"
+          exit 1

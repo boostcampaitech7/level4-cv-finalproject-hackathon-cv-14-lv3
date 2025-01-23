@@ -1,110 +1,68 @@
-import sqlite3
 import pandas as pd
-import random
-
-def csv_to_sqlite(daily_csv, daily_sales_csv):
-    """
-    Save daily CSV data and daily sales CSV data into an SQLite database,
-    plus product_info, and create an inventory table (product_inventory).
-    """
-    with sqlite3.connect("database.db") as conn:
-        cursor = conn.cursor()
-
-        # Create product_info table
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS product_info (
-            ID TEXT PRIMARY KEY,
-            product TEXT,
-            category TEXT,
-            subcategory TEXT,
-            subsubcategory TEXT,
-            brand TEXT
-        )
-        """)
-
-        # Create daily_data (판매수량)
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS daily_data (
-            ID TEXT,
-            date DATE,
-            value INTEGER,
-            FOREIGN KEY (ID) REFERENCES product_info(ID)
-        )
-        """)
-
-        # Create daily_sales_data (판매금액)
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS daily_sales_data (
-            ID TEXT,
-            date DATE,
-            value INTEGER,
-            FOREIGN KEY (ID) REFERENCES product_info(ID)
-        )
-        """)
+import psycopg2
+from config import get_db_args
+from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT, AsIs
+from tqdm import tqdm
 
 
-        # 재고 관리 테이블: product_inventory
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS product_inventory (
-            ID TEXT,
-            value INTEGER,
-            FOREIGN KEY (ID) REFERENCES product_info(ID)
-        )
-        """)
+def csv_to_postgresql(csv_path: str, args) -> None:
+    print("CSV 파일 읽는 중...")
+    df = pd.read_csv(csv_path)
 
-        # Helper function to process time-series data
-        def process_timeseries_data(df, id_col, date_cols, table_name):
-            timeseries_data = []
-            for _, row in df.iterrows():
-                for date_col in date_cols:
-                    if pd.notna(row[date_col]):
-                        # (ID, 'YYYY-MM-DD', value)
-                        timeseries_data.append((row[id_col], date_col, row[date_col]))
-            cursor.executemany(f"INSERT INTO {table_name} VALUES (?, ?, ?)", timeseries_data)
+    conn = psycopg2.connect(dbname=args.dbname, user=args.user, password=args.password, host=args.host, port=args.port)
+    conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
 
-        ###################################################
-        # (1) Load 'daily.csv' => product_info + daily_data
-        ###################################################
-        daily_df = pd.read_csv(daily_csv)
+    try:
+        with conn.cursor() as cursor:
+            print("테이블 생성 중...")
+            cursor.execute("DROP TABLE IF EXISTS time_series_data")
+            cursor.execute("DROP TABLE IF EXISTS product_info")
 
-        # product_info 채우기
-        product_cols = ["ID", "제품", "대분류", "중분류", "소분류", "브랜드"]
-        product_data = daily_df[product_cols].drop_duplicates().values.tolist()
-        cursor.executemany("INSERT OR IGNORE INTO product_info VALUES (?, ?, ?, ?, ?, ?)", product_data)
+            cursor.execute("""
+           CREATE TABLE IF NOT EXISTS product_info (
+               ID VARCHAR(50) PRIMARY KEY,
+               product VARCHAR(200),
+               category VARCHAR(100),
+               subcategory VARCHAR(100),
+               subsubcategory VARCHAR(100),
+               brand VARCHAR(100)
+           )
+           """)
 
-        # 일자 칼럼(202X-XX-XX 형태)
-        date_cols = [col for col in daily_df.columns if col.startswith("202")]
-        process_timeseries_data(daily_df, "ID", date_cols, "daily_data")
+            cursor.execute("""
+           CREATE TABLE IF NOT EXISTS time_series_data (
+               ID VARCHAR(50) PRIMARY KEY,
+               FOREIGN KEY (ID) REFERENCES product_info(ID)
+           )
+           """)
 
-        ###################################################
-        # (2) Load 'daily_sales.csv' => daily_sales_data
-        ###################################################
-        daily_sales_df = pd.read_csv(daily_sales_csv)
-        date_cols_sales = [col for col in daily_sales_df.columns if col.startswith("202")]
-        process_timeseries_data(daily_sales_df, "ID", date_cols_sales, "daily_sales_data")
+            # 날짜 컬럼 추가
+            date_columns = [col for col in df.columns if col.startswith("202")]
+            for date in date_columns:
+                cursor.execute(f'ALTER TABLE time_series_data ADD COLUMN "{date}" INTEGER')
 
-        ###################################################
-        # (3) product_inventory: 100~50000 랜덤값 삽입
-        ###################################################
-        cursor.execute("SELECT ID FROM product_info")
-        all_ids = [row[0] for row in cursor.fetchall()]
+            print("데이터 저장 중...")
+            # 제품 정보 저장
+            product_data = df[["ID", "제품", "대분류", "중분류", "소분류", "브랜드"]].values.tolist()
+            cursor.executemany("INSERT INTO product_info VALUES (%s, %s, %s, %s, %s, %s)", product_data)
 
-        all_ids = sorted(all_ids, key=lambda x: int(x))
+            # 시계열 데이터 저장
+            print("시계열 데이터 저장 중...")
+            for _, row in tqdm(df.iterrows(), total=len(df)):
+                columns = ["ID"] + [f'"{date}"' for date in date_columns]
+                values = [row["ID"]] + [row[date] if pd.notna(row[date]) else None for date in date_columns]
+                query = "INSERT INTO time_series_data (%s) VALUES %s"
+                cursor.execute(query, (AsIs(", ".join(columns)), tuple(values)))
 
-        inventory_data = []
-        for pid in all_ids:
-            rand_value = random.randint(100, 50000)  # 20~1000 사이 정수
-            inventory_data.append((pid, rand_value))
+            print("데이터베이스 변환이 완료되었습니다!")
 
-        cursor.executemany("INSERT INTO product_inventory (ID, value) VALUES (?, ?)", inventory_data)
-
-        # Commit changes
-        conn.commit()
+    except Exception as e:
+        print(f"오류가 발생했습니다: {e}")
+        conn.rollback()
+    finally:
+        conn.close()
 
 
-# CSV 파일 경로
-daily_csv = "train.csv"
-daily_sales_csv = "sales.csv"
-
-# 함수 호출
-csv_to_sqlite(daily_csv, daily_sales_csv)
+if __name__ == "__main__":
+    args = get_db_args()
+    csv_to_postgresql("train.csv", args)
