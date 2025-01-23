@@ -4,6 +4,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import sqlalchemy
 import re
+from dotenv import load_dotenv
+import os
+import requests
+import json
+from openai import OpenAI
 
 # 1) FastAPI 앱 생성
 app = FastAPI()
@@ -20,6 +25,16 @@ app.add_middleware(
 # 2) DB 연결 (SQLite)
 db_path = "../database/database.db"
 engine = sqlalchemy.create_engine(f"sqlite:///{db_path}")
+
+# 환경 변수 로드
+load_dotenv()
+UPSTAGE_API_KEY = os.getenv('UPSTAGE_API_KEY')
+
+# OpenAI 클라이언트 초기화
+client = OpenAI(
+    api_key=UPSTAGE_API_KEY,
+    base_url="https://api.upstage.ai/v1/solar"
+)
 
 # ===== 데이터 로딩 =====
 query_sales = """
@@ -245,6 +260,85 @@ def get_topbottom():
         "last_month_col": last_month_col
     }
 
+# Solar 챗봇 엔드포인트 추가
+@app.post("/api/chat")
+async def chat_with_solar(message: dict):
+    try:
+        # KPI 데이터
+        kpi_info = {
+            "연간 매출": int(annual_sales),
+            "일평균 매출": float(daily_avg),
+            "주간 평균 매출": float(weekly_avg),
+            "월간 평균 매출": float(monthly_avg),
+            "전월 대비 변화율": float(monthly_change)
+        }
+
+        # 재고 부족 상품 정보
+        low_stock_items = low_stock_df[['product', '재고수량', '일판매수량']].to_dict('records')
+
+        # 카테고리별 매출
+        category_sales = df_category.to_dict('records')
+
+        # 월간 매출 데이터
+        monthly_data = monthly_sum_df.to_dict('records')
+
+        # 일간 매출 데이터
+        daily_data = daily_df.tail(7).to_dict('records')  # 최근 7일
+
+        system_message = f"""
+        당신은 판매 데이터 분석 AI 어시스턴트입니다. 다음 정보를 기반으로 질문에 답변해주세요:
+
+        1. KPI 현황:
+        - 연간 매출: {kpi_info['연간 매출']:,}원
+        - 일평균 매출: {kpi_info['일평균 매출']:,.0f}원
+        - 주간 평균 매출: {kpi_info['주간 평균 매출']:,.0f}원
+        - 월간 평균 매출: {kpi_info['월간 평균 매출']:,.0f}원
+        - 전월 대비 변화율: {kpi_info['전월 대비 변화율']:.1f}%
+
+        2. 재고 부족 상품 현황:
+        {', '.join([f"{item['product']}(재고: {item['재고수량']}개, 일판매: {item['일판매수량']}개)" for item in low_stock_items])}
+
+        3. 카테고리별 매출:
+        {', '.join([f"{cat['대분류']}: {cat['매출액']:,}원" for cat in category_sales])}
+
+        4. 상승률: {rise_rate:.1f}%
+        주요 성장 카테고리: {', '.join(subcat_list[:5])}
+
+        5. 최근 일별 매출 현황:
+        {', '.join([f"{row['날짜'].strftime('%Y-%m-%d')}: {row['값']:,}원" for row in daily_data])}
+
+        이 데이터를 기반으로 판매, 재고, 매출 관련 질문에 답변해주세요.
+        답변할 때는 구체적인 숫자를 포함하고, 필요한 경우 추세나 패턴도 설명해주세요.
+        """
+
+        response = client.chat.completions.create(
+            model="solar-pro",
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": message["content"]}
+            ],
+            stream=False
+        )
+        
+        if hasattr(response, 'error'):
+            return {
+                "response": f"API 오류: {response.error}",
+                "status": "error",
+                "error": str(response.error)
+            }
+            
+        return {
+            "response": response.choices[0].message.content,
+            "status": "success"
+        }
+            
+    except Exception as e:
+        print(f"Error details: {str(e)}")
+        return {
+            "response": f"서버 오류가 발생했습니다: {str(e)}",
+            "status": "error",
+            "error": str(e)
+        }
 
 # main
 if __name__ == "__main__":
