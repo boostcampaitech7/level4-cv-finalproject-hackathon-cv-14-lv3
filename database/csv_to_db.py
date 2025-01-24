@@ -15,25 +15,29 @@ def csv_to_postgresql(csv_path: str, args) -> None:
     try:
         with conn.cursor() as cursor:
             print("테이블 생성 중...")
-            cursor.execute("DROP TABLE IF EXISTS time_series_data")
-            cursor.execute("DROP TABLE IF EXISTS product_info")
+            cursor.execute("DROP TABLE IF EXISTS time_series_data CASCADE")
+            cursor.execute("DROP TABLE IF EXISTS product_info CASCADE")
 
-            cursor.execute("""
-           CREATE TABLE IF NOT EXISTS product_info (
-               ID VARCHAR(50) PRIMARY KEY,
-               product VARCHAR(200),
-               category VARCHAR(100),
-               subcategory VARCHAR(100),
-               subsubcategory VARCHAR(100),
-               brand VARCHAR(100)
-           )
+            # Primary Key를 따로 생성
+            df["ID"] = range(len(df))
+
+            cursor.execute(f"""
+           CREATE TABLE product_info (
+               ID INTEGER PRIMARY KEY,
+               Main VARCHAR(100),
+               Sub1 VARCHAR(100),
+               Sub2 VARCHAR(100),
+               Sub3 VARCHAR(100)
+           );
+           ALTER TABLE product_info OWNER TO {args.user};
            """)
 
-            cursor.execute("""
-           CREATE TABLE IF NOT EXISTS time_series_data (
-               ID VARCHAR(50) PRIMARY KEY,
+            cursor.execute(f"""
+           CREATE TABLE time_series_data (
+               ID INTEGER PRIMARY KEY,
                FOREIGN KEY (ID) REFERENCES product_info(ID)
-           )
+           );
+           ALTER TABLE time_series_data OWNER TO {args.user};
            """)
 
             # 날짜 컬럼 추가
@@ -43,8 +47,8 @@ def csv_to_postgresql(csv_path: str, args) -> None:
 
             print("데이터 저장 중...")
             # 제품 정보 저장
-            product_data = df[["ID", "제품", "대분류", "중분류", "소분류", "브랜드"]].values.tolist()
-            cursor.executemany("INSERT INTO product_info VALUES (%s, %s, %s, %s, %s, %s)", product_data)
+            product_data = df[["ID", "Main", "Sub1", "Sub2", "Sub3"]].values.tolist()
+            cursor.executemany("INSERT INTO product_info VALUES (%s, %s, %s, %s, %s)", product_data)
 
             # 시계열 데이터 저장
             print("시계열 데이터 저장 중...")
