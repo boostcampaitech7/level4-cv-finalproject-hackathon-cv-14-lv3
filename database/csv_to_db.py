@@ -7,18 +7,17 @@ import pandas as pd
 def convert_to_sqlite():
     # Read CSV and add ID
     df = pd.read_csv("train.csv")
-    df.insert(0, "ID", range(1, len(df) + 1))
 
     # Split data
     product_info = df[["ID", "Main", "Sub1", "Sub2", "Sub3"]]
     time_series_columns = [col for col in df.columns if col.startswith("202")]
-    time_series_data = df[["ID"] + time_series_columns]
+    time_series_data = df[["ID", *time_series_columns]]
 
     # Convert negative values to positive using absolute value
     time_series_data[time_series_columns] = np.abs(time_series_data[time_series_columns])
 
     # Create SQLite database
-    conn = sqlite3.connect("sales_data.db")
+    conn = sqlite3.connect("train.db")
 
     # Save tables with indexes
     product_info.to_sql("product_info", conn, index=False, if_exists="replace")
