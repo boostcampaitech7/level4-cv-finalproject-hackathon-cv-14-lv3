@@ -67,6 +67,15 @@ const ChatPage = () => {
               key={index}
               style={chat.sender === 'user' ? styles.userMessageContainer : styles.botMessageContainer}
             >
+              {chat.sender === 'bot' && (
+                <div style={styles.botProfile}>
+                  <img 
+                    src="/bot-profile.png"
+                    alt="Bot" 
+                    style={styles.profileImage}
+                  />
+                </div>
+              )}
               <div style={chat.sender === 'user' ? styles.userMessage : styles.botMessage}>
                 {chat.content}
               </div>
@@ -103,9 +112,10 @@ const ChatPage = () => {
 
 const styles = {
   page: {
-    backgroundColor: '#f4f4f9',
-    height: '100vh', // 전체 화면을 고정
-    overflowY: 'hidden', // 전체 페이지에서 스크롤 비활성화
+    backgroundColor: '#f8f9fa',
+    backgroundImage: 'linear-gradient(to bottom right, #f8f9fa, #e9ecef)',
+    height: '100vh',
+    overflowY: 'hidden',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -113,28 +123,31 @@ const styles = {
   },
   title: {
     textAlign: 'center',
-    color: '#333',
-    fontSize: '24px',
-    fontWeight: 'bold',
-    marginBottom: '10px',
+    color: '#2c3e50',
+    fontSize: '28px',
+    fontWeight: '600',
+    marginBottom: '20px',
+    letterSpacing: '0.5px',
+    textShadow: '1px 1px 2px rgba(0,0,0,0.1)',
   },
   container: {
     width: '100%',
     maxWidth: '800px',
-    backgroundColor: 'white',
-    borderRadius: '15px',
-    boxShadow: '0px 4px 6px rgba(0, 0, 0, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: '20px',
+    boxShadow: '0 10px 20px rgba(0, 0, 0, 0.08)',
     display: 'flex',
     flexDirection: 'column',
-    height: '80vh', // 전체 페이지 중 80%를 채우도록 설정
+    height: '80vh',
     overflow: 'hidden',
+    border: '1px solid rgba(0,0,0,0.1)',
   },
   chatHistory: {
-    flex: 1, // 상단 영역을 최대한 차지
-    overflowY: 'auto', // 스크롤 활성화
-    padding: '10px',
-    borderBottom: '1px solid #ddd',
-    backgroundColor: '#f9f9f9',
+    flex: 1,
+    overflowY: 'auto',
+    padding: '20px',
+    borderBottom: '1px solid rgba(0,0,0,0.08)',
+    backgroundColor: 'rgba(249, 249, 249, 0.8)',
   },
   userMessageContainer: {
     display: 'flex',
@@ -145,53 +158,88 @@ const styles = {
     display: 'flex',
     justifyContent: 'flex-start',
     marginBottom: '10px',
+    alignItems: 'flex-start', // 상단 정렬을 위해 추가
   },
   userMessage: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#4a90e2',
     color: 'white',
-    padding: '10px 15px',
-    borderRadius: '15px 15px 0 15px',
+    padding: '12px 18px',
+    borderRadius: '18px 18px 0 18px',
     maxWidth: '70%',
     wordWrap: 'break-word',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
   },
   botMessage: {
-    backgroundColor: '#e9ecef',
-    color: '#333',
-    padding: '10px 15px',
-    borderRadius: '15px 15px 15px 0',
+    backgroundColor: 'white',
+    color: '#2c3e50',
+    padding: '12px 18px',
+    borderRadius: '18px 18px 18px 0',
     maxWidth: '70%',
     wordWrap: 'break-word',
+    marginLeft: '8px',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+    border: '1px solid rgba(0,0,0,0.05)',
   },
   form: {
     display: 'flex',
-    padding: '10px',
-    borderTop: '1px solid #ddd',
+    padding: '15px 20px',
+    borderTop: '1px solid rgba(0,0,0,0.08)',
     backgroundColor: 'white',
   },
   input: {
     flex: 1,
-    padding: '12px',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
+    padding: '12px 18px',
+    border: '1px solid rgba(0,0,0,0.1)',
+    borderRadius: '25px',
     fontSize: '16px',
+    marginRight: '15px',
+    transition: 'all 0.3s ease',
+    '&:focus': {
+      outline: 'none',
+      borderColor: '#4a90e2',
+      boxShadow: '0 0 0 2px rgba(74,144,226,0.2)',
+    },
   },
   button: {
-    padding: '12px 24px',
-    backgroundColor: '#007bff',
+    padding: '12px 28px',
+    backgroundColor: '#4a90e2',
     color: 'white',
     border: 'none',
-    borderRadius: '8px',
+    borderRadius: '25px',
     cursor: 'pointer',
     fontSize: '16px',
+    fontWeight: '500',
+    transition: 'all 0.3s ease',
+    '&:hover': {
+      backgroundColor: '#357abd',
+      transform: 'translateY(-1px)',
+    },
+    '&:disabled': {
+      backgroundColor: '#ccc',
+      cursor: 'not-allowed',
+    },
   },
   error: {
     marginTop: '10px',
     padding: '15px',
-    backgroundColor: '#ffebee',
+    backgroundColor: 'rgba(255,235,238,0.9)',
     color: '#c62828',
-    borderRadius: '8px',
+    borderRadius: '12px',
     fontSize: '16px',
     lineHeight: '1.5',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+  },
+  botProfile: {
+    marginRight: '8px',
+    marginTop: '4px',
+  },
+  profileImage: {
+    width: '40px',
+    height: '40px',
+    borderRadius: '50%',
+    backgroundColor: '#e9ecef',
+    border: '2px solid white',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
   },
 };
 
