@@ -23,15 +23,14 @@ def csv_to_postgresql(daily_csv: str, daily_sales_csv: str, args) -> None:
             cursor.execute("DROP TABLE IF EXISTS product_inventory")
             cursor.execute("DROP TABLE IF EXISTS product_info")
 
-            # product_info 테이블 생성
+            # product_info 테이블 생성 (컬럼명 변경)
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS product_info (
                 ID VARCHAR(50) PRIMARY KEY,
-                product VARCHAR(200),
-                category VARCHAR(100),
-                subcategory VARCHAR(100),
-                subsubcategory VARCHAR(100),
-                brand VARCHAR(100)
+                Main VARCHAR(200),
+                Sub1 VARCHAR(100),
+                Sub2 VARCHAR(100),
+                Sub3 VARCHAR(100)
             )
             """)
 
@@ -65,10 +64,10 @@ def csv_to_postgresql(daily_csv: str, daily_sales_csv: str, args) -> None:
             """)
 
             print("제품 정보 저장 중...")
-            # product_info 데이터 저장
-            product_data = daily_df[["ID", "제품", "대분류", "중분류", "소분류", "브랜드"]].drop_duplicates().values.tolist()
+            # product_info 데이터 저장 (컬럼명 변경)
+            product_data = daily_df[["ID", "Main", "Sub1", "Sub2", "Sub3"]].drop_duplicates().values.tolist()
             cursor.executemany(
-                "INSERT INTO product_info VALUES (%s, %s, %s, %s, %s, %s)", 
+                "INSERT INTO product_info VALUES (%s, %s, %s, %s, %s)", 
                 product_data
             )
 
@@ -114,11 +113,10 @@ def csv_to_postgresql(daily_csv: str, daily_sales_csv: str, args) -> None:
                 )
 
             print("재고 데이터 생성 및 저장 중...")
-            # product_inventory 데이터 생성 및 저장
             cursor.execute("SELECT ID FROM product_info ORDER BY ID")
             all_ids = [row[0] for row in cursor.fetchall()]
             
-            inventory_data = [(pid, random.randint(100, 50000)) for pid in all_ids]
+            inventory_data = [(pid, random.randint(10, 50000)) for pid in all_ids]
             cursor.executemany(
                 "INSERT INTO product_inventory (ID, value) VALUES (%s, %s)",
                 inventory_data

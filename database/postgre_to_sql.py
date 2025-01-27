@@ -19,11 +19,10 @@ def export_to_sqlite():
         sqlite_cursor.execute("""
         CREATE TABLE IF NOT EXISTS product_info (
             ID TEXT PRIMARY KEY,
-            product TEXT,
-            category TEXT,
-            subcategory TEXT,
-            subsubcategory TEXT,
-            brand TEXT
+            Main TEXT,
+            Sub1 TEXT,
+            Sub2 TEXT,
+            Sub3 TEXT
         )
         """)
 
