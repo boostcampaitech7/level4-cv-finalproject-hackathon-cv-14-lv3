@@ -437,7 +437,15 @@ function App() {
     position: "relative",
     overflow: "hidden",
     backfaceVisibility: "hidden",  // 3D 변환 시 뒷면 숨김
-    transformStyle: "preserve-3d"  // 3D 공간에서의 변환 유지
+    transformStyle: "preserve-3d",  // 3D 공간에서의 변환 유지
+    whiteSpace: "pre-wrap",        // 텍스트 줄바꿈 허용
+    wordBreak: "break-word",       // 긴 단어 줄바꿈
+    padding: "10px",               // 텍스트 여백 추가
+    textAlign: "center",           // 텍스트 가운데 정렬
+    display: "flex",               // Flexbox 사용
+    flexDirection: "column",       // 세로 방향 정렬
+    justifyContent: "center",      // 세로 중앙 정렬
+    alignItems: "center"           // 가로 중앙 정렬
   };
 
   // 스타일 시트에 애니메이션 추가
@@ -876,9 +884,16 @@ function App() {
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
-          alignItems: "center"
+          alignItems: "center",
+          position: "relative"
         }}>
-          <h2 style={{ textAlign: "center", fontWeight: "bold" }}>카테고리별 매출 파이차트</h2>
+          <h2 style={{ 
+            textAlign: "center", 
+            fontWeight: "bold",
+            position: "absolute",
+            top: "20px",
+            width: "100%"
+          }}>카테고리별 매출 파이차트</h2>
           <Plot
             data={[{
               ...pieData[0],
@@ -888,11 +903,11 @@ function App() {
               ),
               marker: {
                 colors: [
-                  '#FF8C7C',  // 코랄 핑크
-                  '#FFB088',  // 피치
-                  '#FFC988',  // 파스텔 오렌지
-                  '#FFD7A8',  // 살구색
-                  '#FFAC7F'   // 연한 테라코타
+                  '#FF8BA7',  // 부드러운 로즈
+                  '#7EC4CF',  // 청록색
+                  '#FFB347',  // 밝은 주황
+                  '#98D8C1',  // 민트
+                  '#B5A8FF'   // 라벤더
                 ]
               },
               type: 'pie',
@@ -900,26 +915,22 @@ function App() {
               scalegroup: 1
             }]}
             layout={{
-              title: {
-                text: "대분류별 매출 비중",
-                font: { size: 18, color: '#333', family: "Arial, sans-serif", weight: "bold" }
-              },
-              width: 450,
-              height: 350,
+              width: 600,
+              height: 500,
               showlegend: true,
               legend: {
                 orientation: "v",
                 xanchor: "left",
                 yanchor: "middle",
-                x: 1.2,        // 범례를 오른쪽으로 더 멀리
-                y: 0.5         // 범례를 중앙에 위치
+                x: 1.2,
+                y: 0.5
               },
-              margin: { l: 50, r: 200, t: 80, b: 50 },  // 오른쪽 여백 증가
+              margin: { l: 50, r: 200, t: 50, b: 50 },
               paper_bgcolor: 'rgba(0,0,0,0)',
               plot_bgcolor: 'rgba(0,0,0,0)',
               scene: {
                 camera: {
-                  eye: { x: 2, y: 2, z: 2 }  // 3D 시점
+                  eye: { x: 2, y: 2, z: 2 }
                 }
               }
             }}
@@ -946,7 +957,7 @@ function App() {
               {lowStock.map((item, idx) => (
                 <tr key={idx}>
                   <td style={{ border: "1px solid #ccc" }}>{item.ID}</td>
-                  <td style={{ border: "1px solid #ccc" }}>{item.product}</td>
+                  <td style={{ border: "1px solid #ccc" }}>{item.Sub3}</td>
                   <td style={{ border: "1px solid #ccc" }}>{item.재고수량}</td>
                   <td style={{ border: "1px solid #ccc" }}>{item.일판매수량}</td>
                   <td style={{ border: "1px solid #ccc" }}>{item["남은 재고"]}</td>

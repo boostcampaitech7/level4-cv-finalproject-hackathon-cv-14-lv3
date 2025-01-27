@@ -40,8 +40,8 @@ client = OpenAI(
 query_sales = """
 SELECT
     d.ID,
-    p.category AS 대분류,
-    p.subsubcategory AS 소분류,
+    p.Sub1 AS 대분류,
+    p.Sub3 AS 소분류,
     d.date,
     d.value AS 매출액
 FROM daily_sales_data d
@@ -61,7 +61,7 @@ df_quantity = pd.read_sql(query_quantity, con=engine)
 inventory_sql = """
 SELECT
     p.ID,
-    p.product,
+    p.Main,
     inv.value AS 재고수량
 FROM product_inventory inv
 JOIN product_info p ON inv.ID = p.ID
@@ -132,7 +132,7 @@ else:
 merged_df = pd.merge(inventory_df, daily_sales_quantity_last, on='ID', how='left')
 merged_df['일판매수량'] = merged_df['일판매수량'].fillna(0)
 merged_df['남은 재고'] = merged_df['재고수량'] - merged_df['일판매수량']
-low_stock_df = merged_df[merged_df['남은 재고'] <= 20]
+low_stock_df = merged_df[(merged_df['남은 재고'] >= 0) & (merged_df['남은 재고'] <= 30)]
 
 # 매출 상승폭(소분류)
 data["소분류"] = data["소분류"].fillna('기타')
@@ -202,11 +202,15 @@ def get_kpis():
 
 @app.get("/api/daily")
 def get_daily_data():
-    return daily_df.to_dict(orient="records")
+    # 2023년 이후 데이터만 필터링
+    filtered_daily = daily_df[daily_df['날짜'] >= '2023-01-01']
+    return filtered_daily.to_dict(orient="records")
 
 @app.get("/api/weekly")
 def get_weekly_data():
-    return weekly_data.to_dict(orient="records")
+    # 2022년 10월 이후 데이터만 필터링
+    filtered_weekly = weekly_data[weekly_data['주간'] >= '2022-10-01']
+    return filtered_weekly.to_dict(orient="records")
 
 @app.get("/api/monthly")
 def get_monthly_data():
@@ -214,11 +218,20 @@ def get_monthly_data():
 
 @app.get("/api/categorypie")
 def get_category_pie():
-    return df_category.to_dict(orient="records")
+    # 매출액 기준으로 정렬하고 상위 5개만 선택
+    top_5_categories = df_category.nlargest(5, '매출액')
+    return top_5_categories.to_dict(orient="records")
 
 @app.get("/api/lowstock")
 def get_low_stock():
-    return low_stock_df.to_dict(orient="records")
+    # product_info 테이블에서 sub3 정보 가져오기
+    product_info = pd.read_sql("SELECT id, sub3 FROM product_info", engine)
+    product_info = product_info.rename(columns={'id': 'ID', 'sub3': 'Sub3'})
+    
+    # low_stock_df와 product_info 병합
+    merged_low_stock = pd.merge(low_stock_df, product_info, on='ID', how='left')
+    
+    return merged_low_stock.to_dict(orient="records")
 
 @app.get("/api/rising-subcategories")
 def get_rising_subcategories():
@@ -231,28 +244,31 @@ def get_rising_subcategories():
 # (추가) 상·하위 10개 품목
 @app.get("/api/topbottom")
 def get_topbottom():
-    """
-    Dash 코드에서:
-      if last_month_col:
-          top_10_last_month = result.nlargest(10, last_month_col, keep='all').copy()
-          top_10_last_month["color"] = reds
-          ...
-    """
-    global result, last_month_col
-
     if last_month_col:
+        # id와 sub3 정보 가져오기 (소문자로 수정)
+        product_info = pd.read_sql("SELECT id, sub3 FROM product_info", engine)
+        product_info = product_info.rename(columns={'id': 'ID', 'sub3': 'Sub3'})  # 컬럼명 대문자로 변경
+        
+        # top 10
         top_10_df = result.nlargest(10, last_month_col, keep='all').copy()
+        top_10_df = pd.merge(top_10_df, product_info, on='ID', how='left')
         top_10_df["color"] = [reds] * len(top_10_df)
 
+        # bottom 10
         non_zero_values = result[result[last_month_col] != 0]
         bottom_10_df = non_zero_values.nsmallest(10, last_month_col).copy()
+        bottom_10_df = pd.merge(bottom_10_df, product_info, on='ID', how='left')
         bottom_10_df["color"] = [blues] * len(bottom_10_df)
-    else:
-        top_10_df = pd.DataFrame(columns=result.columns)
-        bottom_10_df = pd.DataFrame(columns=result.columns)
 
-    top_10_list = top_10_df.to_dict(orient='records')
-    bottom_10_list = bottom_10_df.to_dict(orient='records')
+        # display_name을 Sub3로만 설정 (ID는 사용하지 않음)
+        top_10_df['display_name'] = top_10_df['Sub3']
+        bottom_10_df['display_name'] = bottom_10_df['Sub3']
+
+        top_10_list = top_10_df.to_dict(orient='records')
+        bottom_10_list = bottom_10_df.to_dict(orient='records')
+    else:
+        top_10_list = []
+        bottom_10_list = []
 
     return {
         "top_10": top_10_list,
@@ -273,11 +289,11 @@ async def chat_with_solar(message: dict):
             "전월 대비 변화율": float(monthly_change)
         }
 
-        # 재고 부족 상품 정보
-        low_stock_items = low_stock_df[['product', '재고수량', '일판매수량']].to_dict('records')
+        # 재고 부족 상품 정보 (0 <= 남은 재고 <= 30)
+        low_stock_items = low_stock_df[['Main', 'Sub3', '재고수량', '일판매수량', '남은 재고']].to_dict('records')
 
-        # 카테고리별 매출
-        category_sales = df_category.to_dict('records')
+        # 카테고리별 매출 (Sub1 기준)
+        category_sales = df_sales.groupby('대분류')['매출액'].sum().reset_index().to_dict('records')
 
         # 월간 매출 데이터
         monthly_data = monthly_sum_df.to_dict('records')
@@ -295,14 +311,14 @@ async def chat_with_solar(message: dict):
         - 월간 평균 매출: {kpi_info['월간 평균 매출']:,.0f}원
         - 전월 대비 변화율: {kpi_info['전월 대비 변화율']:.1f}%
 
-        2. 재고 부족 상품 현황:
-        {', '.join([f"{item['product']}(재고: {item['재고수량']}개, 일판매: {item['일판매수량']}개)" for item in low_stock_items])}
+        2. 재고 부족 상품 현황 (0 <= 남은 재고 <= 30):
+        {', '.join([f"{item['Main']}({item['Sub3']}): 재고 {item['재고수량']}개, 일판매 {item['일판매수량']}개, 남은재고 {item['남은 재고']}개" for item in low_stock_items])}
 
-        3. 카테고리별 매출:
+        3. 카테고리별 매출 (대분류 기준):
         {', '.join([f"{cat['대분류']}: {cat['매출액']:,}원" for cat in category_sales])}
 
         4. 상승률: {rise_rate:.1f}%
-        주요 성장 카테고리: {', '.join(subcat_list[:5])}
+        주요 성장 카테고리(소분류): {', '.join(subcat_list[:5])}
 
         5. 최근 일별 매출 현황:
         {', '.join([f"{row['날짜'].strftime('%Y-%m-%d')}: {row['값']:,}원" for row in daily_data])}
