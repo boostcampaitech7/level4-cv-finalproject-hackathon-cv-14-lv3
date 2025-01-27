@@ -5,7 +5,8 @@
 
 ## Database Schema
 
-![Database Schema](https://github.com/boostcampaitech7/level4-cv-finalproject-hackathon-cv-14-lv3/tree/main/src/db_mermaid.png)
+<img width="900" alt="image" src="https://github.com/boostcampaitech7/level4-cv-finalproject-hackathon-cv-14-lv3/tree/main/src/db_mermaid.png">
+
 
 - `product_info`: ID, Amazon taxonomy(Main-Sub-Sub1-Sub2-Sub3)으로 구성되어 있습니다.
 - `time_series_data`: ID, 시계열 데이터로 구성되어 있습니다.
@@ -56,10 +57,11 @@ sudo systemctl status postgresql # Check if PostgreSQL is running
 sudo nano /etc/postgresql/16/main/postgresql.conf
 listen_addresses = '*' # 이 내용을 파일에 추가해주세요
 ```
-![PostgreSQL result](https://github.com/boostcampaitech7/level4-cv-finalproject-hackathon-cv-14-lv3/tree/main/src/postgre_result.png)
+
+<img width="900" alt="image" src="https://github.com/boostcampaitech7/level4-cv-finalproject-hackathon-cv-14-lv3/tree/main/src/postgre_result.png">
 
 
 ### Step 4. n8n에 PostgreSQL 연결하기
 n8n에서 PostgreSQL을 활용하기 위해서는 `PostgreSQL node`를 활용합니다. 아래의 이미지를 참고하여 설정해주세요.
 
-![n8n_postgre](https://github.com/boostcampaitech7/level4-cv-finalproject-hackathon-cv-14-lv3/tree/main/src/n8n_postgre.png)
+<img width="900" alt="image" src="https://github.com/boostcampaitech7/level4-cv-finalproject-hackathon-cv-14-lv3/tree/main/src/n8n_postgre.png">
