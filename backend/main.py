@@ -62,6 +62,7 @@ inventory_sql = """
 SELECT
     p.ID,
     p.Main,
+    p.Sub3,
     inv.value AS 재고수량
 FROM product_inventory inv
 JOIN product_info p ON inv.ID = p.ID
@@ -276,55 +277,120 @@ def get_topbottom():
         "last_month_col": last_month_col
     }
 
-# Solar 챗봇 엔드포인트 추가
+# 챗봇용 데이터 미리 준비
+def prepare_chat_data():
+    # 월별 매출 데이터
+    monthly_sales_text = "월별 매출 데이터:\n" + "\n".join([
+        f"{row['월간'].strftime('%Y-%m')}: {row['값']:,}원" 
+        for row in monthly_sum_df.to_dict('records')
+    ])
+
+    # 주간 매출 데이터
+    weekly_sales_text = "주간 매출 데이터:\n" + "\n".join([
+        f"{row['주간'].strftime('%Y-%m-%d')}: {row['값']:,}원" 
+        for row in weekly_data.tail(12).to_dict('records')
+    ])
+
+    # 일별 매출 데이터
+    daily_sales_text = "최근 30일 일별 매출 데이터:\n" + "\n".join([
+        f"{row['날짜'].strftime('%Y-%m-%d')}: {row['값']:,}원" 
+        for row in daily_df.tail(30).to_dict('records')
+    ])
+
+    # 카테고리별 매출 상세
+    category_details = df_sales.groupby('대분류').agg({
+        '매출액': ['sum', 'mean', 'count']
+    }).reset_index()
+    category_details.columns = ['대분류', '총매출', '평균매출', '판매건수']
+    
+    category_text = "카테고리별 매출 상세:\n" + "\n".join([
+        f"{row['대분류']}: 총매출 {row['총매출']:,}원, 평균 {row['평균매출']:,.0f}원, {row['판매건수']}건" 
+        for _, row in category_details.iterrows()
+    ])
+
+    # 재고 현황 상세
+    inventory_status = pd.read_sql("""
+        SELECT 
+            p.Sub1 AS 대분류,
+            p.Sub3 AS 소분류,
+            SUM(inv.value) as 재고수량,
+            COALESCE(SUM(d.value), 0) as 일판매수량,
+            SUM(inv.value) - COALESCE(SUM(d.value), 0) as 남은재고
+        FROM product_inventory inv
+        JOIN product_info p ON inv.ID = p.ID
+        LEFT JOIN daily_data d ON inv.ID = d.ID
+        GROUP BY p.Sub1, p.Sub3
+    """, con=engine)
+    
+    inventory_text = "카테고리별 재고 현황:\n" + "\n".join([
+        f"{row['대분류'] if pd.notna(row['대분류']) else '미분류'}({row['소분류'] if pd.notna(row['소분류']) else '미분류'}): 총재고 {row['재고수량']}개, 일판매량 {row['일판매수량']}개, 남은재고 {row['남은재고']}개" 
+        for _, row in inventory_status.iterrows()
+    ])
+
+    return {
+        "monthly_sales": monthly_sales_text,
+        "weekly_sales": weekly_sales_text,
+        "daily_sales": daily_sales_text,
+        "category_details": category_text,
+        "inventory_status": inventory_text
+    }
+
+# 데이터 미리 준비
+CHAT_DATA = prepare_chat_data()
+
 @app.post("/api/chat")
 async def chat_with_solar(message: dict):
     try:
-        # KPI 데이터
-        kpi_info = {
-            "연간 매출": int(annual_sales),
-            "일평균 매출": float(daily_avg),
-            "주간 평균 매출": float(weekly_avg),
-            "월간 평균 매출": float(monthly_avg),
-            "전월 대비 변화율": float(monthly_change)
-        }
-
-        # 재고 부족 상품 정보 (0 <= 남은 재고 <= 30)
-        low_stock_items = low_stock_df[['Main', 'Sub3', '재고수량', '일판매수량', '남은 재고']].to_dict('records')
-
-        # 카테고리별 매출 (Sub1 기준)
-        category_sales = df_sales.groupby('대분류')['매출액'].sum().reset_index().to_dict('records')
-
-        # 월간 매출 데이터
-        monthly_data = monthly_sum_df.to_dict('records')
-
-        # 일간 매출 데이터
-        daily_data = daily_df.tail(7).to_dict('records')  # 최근 7일
+        # product_info 테이블에서 sub3 정보 가져오기
+        product_info = pd.read_sql("SELECT id, sub3 FROM product_info", engine)
+        product_info = product_info.rename(columns={'id': 'ID', 'sub3': 'Sub3'})
+        
+        # low_stock_df와 product_info 병합
+        merged_low_stock = pd.merge(low_stock_df, product_info, on='ID', how='left')
+        total_low_stock = len(merged_low_stock)
+        
+        if total_low_stock > 0:
+            low_stock_list = "\n".join([
+                f"- {row['Sub3'] if pd.notna(row['Sub3']) else '미분류'}: {row['남은 재고']}개" 
+                for _, row in merged_low_stock.iterrows()
+            ])
+        else:
+            low_stock_list = "현재 재고 부족 상품이 없습니다."
 
         system_message = f"""
-        당신은 판매 데이터 분석 AI 어시스턴트입니다. 다음 정보를 기반으로 질문에 답변해주세요:
+        당신은 판매 데이터 분석 AI 어시스턴트입니다. 
+        아래의 핵심 지표들을 분석하여 간단히 답변해주세요.
 
-        1. KPI 현황:
-        - 연간 매출: {kpi_info['연간 매출']:,}원
-        - 일평균 매출: {kpi_info['일평균 매출']:,.0f}원
-        - 주간 평균 매출: {kpi_info['주간 평균 매출']:,.0f}원
-        - 월간 평균 매출: {kpi_info['월간 평균 매출']:,.0f}원
-        - 전월 대비 변화율: {kpi_info['전월 대비 변화율']:.1f}%
+        === 매출 현황 ===
+        - 연간 매출: {int(annual_sales):,}원
+        - 일평균 매출: {float(daily_avg):,.0f}원
+        - 주간 평균 매출: {float(weekly_avg):,.0f}원
+        - 월간 평균 매출: {float(monthly_avg):,.0f}원
+        - 최근 일일 매출: {int(last_daily):,}원
+        - 최근 주간 매출: {int(last_weekly):,}원
+        - 최근 월간 매출: {int(last_monthly):,}원
+        - 전월 대비 변화율: {float(monthly_change):.1f}%
 
-        2. 재고 부족 상품 현황 (0 <= 남은 재고 <= 30):
-        {', '.join([f"{item['Main']}({item['Sub3']}): 재고 {item['재고수량']}개, 일판매 {item['일판매수량']}개, 남은재고 {item['남은 재고']}개" for item in low_stock_items])}
+        === 카테고리 분석 ===
+        - 매출 상승률: {float(rise_rate):.1f}%
+        - 주요 성장 카테고리(소분류): {', '.join(subcat_list[:5])}
 
-        3. 카테고리별 매출 (대분류 기준):
-        {', '.join([f"{cat['대분류']}: {cat['매출액']:,}원" for cat in category_sales])}
+        === 재고 현황 ===
+        - 재고 부족 상품 수: {total_low_stock}개
+        - 재고 부족 상품 목록:
+        {low_stock_list}
 
-        4. 상승률: {rise_rate:.1f}%
-        주요 성장 카테고리(소분류): {', '.join(subcat_list[:5])}
+        답변 형식:
+        1. 매출 현황
+        - 주요 수치들을 직접적으로 언급해주세요.
+        - 계산 과정은 생략하고 결과만 알려주세요.
 
-        5. 최근 일별 매출 현황:
-        {', '.join([f"{row['날짜'].strftime('%Y-%m-%d')}: {row['값']:,}원" for row in daily_data])}
+        2. 카테고리 분석
+        - 매출 상승률과 주요 카테고리만 간단히 설명해주세요.
 
-        이 데이터를 기반으로 판매, 재고, 매출 관련 질문에 답변해주세요.
-        답변할 때는 구체적인 숫자를 포함하고, 필요한 경우 추세나 패턴도 설명해주세요.
+        3. 재고 현황
+        - 재고 부족 상품의 이름과 남은 재고 수량만 알려주세요.
+        - 재고 보충이 필요하다는 점만 간단히 언급해주세요.
         """
 
         response = client.chat.completions.create(
@@ -333,7 +399,8 @@ async def chat_with_solar(message: dict):
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": message["content"]}
             ],
-            stream=False
+            stream=False,
+            response_format={"type": "text/html"}  # HTML 형식 응답 요청
         )
         
         if hasattr(response, 'error'):
