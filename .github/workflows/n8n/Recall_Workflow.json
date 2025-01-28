@@ -1,0 +1,189 @@
+{
+  "name": "Recall-Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "c055762a-8fe7-4141-a639-df2372f30060",
+      "typeVersion": 1.1,
+      "name": "Workflow Input Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        300,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "output.products",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1060,
+        280
+      ],
+      "id": "14df8a75-70f8-4606-9545-c15518ebd18a",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.data }}",
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n  \"type\": \"object\",\n  \"properties\": {\n    \"products\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"id\": {\n            \"type\": \"string\",\n            \"description\": \"제품 식별 번호\"\n          },\n          \"product_name\": {\n            \"type\": \"string\",\n            \"description\": \"제품명\"\n          },\n          \"model_name\": {\n            \"type\": \"string\",\n            \"description\": \"모델명\"\n          },\n          \"company_name\": {\n            \"type\": \"string\",\n            \"description\": \"사업자명\"\n          },\n          \"recall_type\": {\n            \"type\": \"string\",\n            \"description\": \"리콜종류\"\n          },\n          \"barcode\": {\n            \"type\": \"string\",\n            \"description\": \"바코드번호\"\n          },\n          \"recall_date\": {\n            \"type\": \"string\",\n            \"description\": \"리콜공표일\",\n            \"format\": \"date\"\n          },\n          \"image_url\": {\n            \"type\": \"string\",\n            \"description\": \"제품 이미지 URL\"\n          }\n        },\n        \"required\": [\"product_name\", \"model_name\", \"company_name\", \"recall_type\", \"recall_date\"]\n      }\n    }\n  }\n}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1,
+      "position": [
+        740,
+        280
+      ],
+      "id": "650d9932-4839-4150-abd7-5929982ad9c0",
+      "name": "Recall Information Extractor",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        300,
+        480
+      ],
+      "id": "d39d2e1f-0743-4652-ae22-5da46d004dc8",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "solar-pro",
+          "mode": "id"
+        },
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        460
+      ],
+      "id": "f1d93e81-9873-420d-a747-171378c5fda0",
+      "name": "Solar Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "1NzrEJLMzjNtK0g8",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://r.jina.ai/https://www.safetykorea.kr/recall/recallBoard",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        280
+      ],
+      "id": "cbc47de4-e8d1-4f66-98cb-4185c7ec0fac",
+      "name": "Jina AI API Request",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "9uo6to9cpgHOVGvn",
+          "name": "jina"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Workflow Input Trigger": {
+      "main": [
+        [
+          {
+            "node": "Jina AI API Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recall Information Extractor": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        []
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Jina AI API Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Solar Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Recall Information Extractor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jina AI API Request": {
+      "main": [
+        [
+          {
+            "node": "Recall Information Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "6d22becc-1573-4df3-9457-70dd824b5f6c",
+  "meta": {
+    "templateId": "VMiAxXa3lCAizGB5f7dVZQSFfg3FtHkdTKvLuupqBls=",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2bf14225034dfb2d8498032d805718ab7af6ff6458c61a42e219515f095f1c9f"
+  },
+  "id": "dUeryqbPQ2bruLXi",
+  "tags": []
+}
