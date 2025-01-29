@@ -1,127 +1,184 @@
-import pickle
+import os
 import sqlite3
+from base64 import b64decode, b64encode
+from typing import ClassVar
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from openai import OpenAI
 
 
 class HierarchicalCategorySearch:
-    def __init__(self, db_path: str = "category_embeddings.db"):
-        self.model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    VALID_LEVELS: ClassVar[set[str]] = {"main", "sub1", "sub2", "sub3"}
+
+    def __init__(self, db_path: str = "category_embeddings.db", api_key: str | None = None):
+        if not api_key:
+            api_key = os.getenv("UPSTAGE_API_KEY")
+            if not api_key:
+                raise ValueError("Upstage API key is required")
+
+        self.client = OpenAI(api_key=api_key, base_url="https://api.upstage.ai/v1/solar")
         self.db_path = db_path
 
-    def get_unique_values(self, level: str, parent_conditions: dict[str, str] = None) -> list[str]:
-        """특정 레벨의 고유한 값들을 가져옴"""
+    def serialize_embedding(self, embedding: np.ndarray) -> bytes:
+        """Convert numpy array to bytes using base64 encoding"""
+        return b64encode(embedding.tobytes())
+
+    def deserialize_embedding(self, data: bytes) -> np.ndarray:
+        """Convert base64 encoded bytes back to numpy array"""
+        return np.frombuffer(b64decode(data))
+
+    def get_embedding(self, text: str) -> np.ndarray:
+        """Get embedding from Upstage API"""
+        response = self.client.embeddings.create(input=text, model="embedding-query")
+        return np.array(response.data[0].embedding)
+
+    def get_unique_values(self, level: str, parent_conditions: dict[str, str] | None = None) -> list[str]:
+        """Get unique values for a specific category level"""
+        if level not in self.VALID_LEVELS:
+            raise ValueError(f"Invalid level: {level}")
+
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        query = f'SELECT DISTINCT {level} FROM category_hierarchy WHERE {level} != ""'
+        params: list[str] = []
+        query_parts = ["SELECT DISTINCT ? FROM category_hierarchy WHERE ? != ''"]
+        params.extend([level, level])
 
         if parent_conditions:
-            conditions = [f"{k} = ?" for k in parent_conditions.keys()]
-            query += f" AND {' AND '.join(conditions)}"
-            cursor.execute(query, list(parent_conditions.values()))
-        else:
-            cursor.execute(query)
+            conditions = []
+            for k, v in parent_conditions.items():
+                if k not in self.VALID_LEVELS:
+                    raise ValueError(f"Invalid condition key: {k}")
+                conditions.append("? = ?")
+                params.extend([k, v])
+
+            if conditions:
+                query_parts.append("AND")
+                query_parts.append(" AND ".join(conditions))
+
+        query = " ".join(query_parts)
+        cursor.execute(query, params)
 
         values = [row[0] for row in cursor.fetchall()]
         conn.close()
         return values
 
-    def get_embedding_for_category(self, category_values: dict[str, str]) -> np.ndarray:
-        """특정 카테고리 조합의 임베딩을 가져옴"""
+    def get_embedding_for_category(self, category_values: dict[str, str]) -> np.ndarray | None:
+        """Get embedding for a specific category combination"""
+        if not all(k in self.VALID_LEVELS for k in category_values.keys()):
+            raise ValueError("Invalid category keys")
+
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        conditions = [f"{k} = ?" for k in category_values.keys()]
-        query = f"""
-        SELECT embedding
-        FROM category_hierarchy
-        WHERE {" AND ".join(conditions)}
-        """
+        # 안전한 쿼리 구성
+        placeholders = []
+        params = []
 
-        cursor.execute(query, list(category_values.values()))
-        result = cursor.fetchone()
+        # VALID_LEVELS에 있는 필드만 사용
+        for field in self.VALID_LEVELS:
+            if field in category_values:
+                placeholders.append(f"{field} = ?")
+                params.append(category_values[field])
 
-        if result:
-            embedding = pickle.loads(result[0])
+        # 미리 정의된 고정 쿼리 사용
+        base_query = "SELECT embedding FROM category_hierarchy"
+        if placeholders:
+            query = f"{base_query} WHERE {' AND '.join(placeholders)}"
         else:
-            embedding = None
+            query = base_query
 
-        conn.close()
-        return embedding
+        try:
+            cursor.execute(query, params)
+            result = cursor.fetchone()
 
-    def find_best_category(self, input_text: str) -> dict[str, str]:
-        """입력 텍스트에 대한 최적의 카테고리 조합을 찾음"""
-        query_embedding = self.model.encode([input_text])[0]
-        result = {}
+            if result:
+                return self.deserialize_embedding(result[0])
+            return None
 
-        # 1. Main 카테고리 찾기
-        main_categories = self.get_unique_values("main")
-        best_main = self.find_best_match(query_embedding, main_categories, {})
-        result["main"] = best_main
-        print(f"\n1. Selected Main Category: {best_main}")
+        finally:
+            conn.close()
 
-        # 2. Sub1 카테고리 찾기
-        sub1_categories = self.get_unique_values("sub1", {"main": best_main})
-        if sub1_categories:
-            best_sub1 = self.find_best_match(query_embedding, sub1_categories, {"main": best_main})
-            result["sub1"] = best_sub1
-            print(f"2. Selected Sub1 Category: {best_sub1}")
-
-            # 3. Sub2 카테고리 찾기
-            sub2_categories = self.get_unique_values("sub2", {"main": best_main, "sub1": best_sub1})
-            if sub2_categories:
-                best_sub2 = self.find_best_match(query_embedding, sub2_categories, {"main": best_main, "sub1": best_sub1})
-                result["sub2"] = best_sub2
-                print(f"3. Selected Sub2 Category: {best_sub2}")
-
-                # 4. Sub3 카테고리 찾기
-                sub3_categories = self.get_unique_values("sub3", {"main": best_main, "sub1": best_sub1, "sub2": best_sub2})
-                if sub3_categories:
-                    best_sub3 = self.find_best_match(
-                        query_embedding, sub3_categories, {"main": best_main, "sub1": best_sub1, "sub2": best_sub2}
-                    )
-                    result["sub3"] = best_sub3
-                    print(f"4. Selected Sub3 Category: {best_sub3}")
-
-        return result
-
-    def find_best_match(self, query_embedding: np.ndarray, candidates: list[str], parent_values: dict[str, str]) -> str:
-        """주어진 후보들 중에서 가장 유사한 카테고리를 찾음"""
+    def find_best_match(
+        self, query_embedding: np.ndarray, candidates: list[str], parent_values: dict[str, str]
+    ) -> tuple[str | None, float]:
+        """Find the best matching category from candidates"""
         best_similarity = -1
         best_candidate = None
 
         for candidate in candidates:
-            # 현재 레벨의 카테고리 값을 포함한 전체 경로 생성
             current_values = parent_values.copy()
-            current_level = "sub" + str(len(parent_values)) if parent_values else "main"
+            current_level = f"sub{len(parent_values)}" if parent_values else "main"
             current_values[current_level] = candidate
 
-            # 해당 카테고리 조합의 임베딩 가져오기
             category_embedding = self.get_embedding_for_category(current_values)
             if category_embedding is None:
                 continue
 
-            # 코사인 유사도 계산
             similarity = np.dot(query_embedding, category_embedding) / (
                 np.linalg.norm(query_embedding) * np.linalg.norm(category_embedding)
             )
-
-            print(f"  - {candidate}: {similarity:.4f}")
 
             if similarity > best_similarity:
                 best_similarity = similarity
                 best_candidate = candidate
 
-        return best_candidate
+        return best_candidate, best_similarity
+
+    def find_best_category(self, input_text: str) -> dict[str, str]:
+        """Find the best category combination for input text"""
+        query_embedding = self.get_embedding(input_text)
+        result = {}
+
+        # 1. Find Main category
+        main_categories = self.get_unique_values("main")
+        best_main, main_similarity = self.find_best_match(query_embedding, main_categories, {})
+
+        if best_main is None:
+            return result
+
+        result["main"] = best_main
+        print(f"\n1. Selected Main Category: {best_main}")
+
+        # 2. Find Sub1 category
+        sub1_categories = self.get_unique_values("sub1", {"main": best_main})
+        if sub1_categories:
+            best_sub1, sub1_similarity = self.find_best_match(query_embedding, sub1_categories, {"main": best_main})
+            if best_sub1:
+                result["sub1"] = best_sub1
+                print(f"2. Selected Sub1 Category: {best_sub1}")
+
+                # 3. Find Sub2 category
+                sub2_categories = self.get_unique_values("sub2", {"main": best_main, "sub1": best_sub1})
+                if sub2_categories:
+                    best_sub2, sub2_similarity = self.find_best_match(
+                        query_embedding, sub2_categories, {"main": best_main, "sub1": best_sub1}
+                    )
+                    if best_sub2:
+                        result["sub2"] = best_sub2
+                        print(f"3. Selected Sub2 Category: {best_sub2}")
+
+                        # 4. Find Sub3 category
+                        sub3_categories = self.get_unique_values("sub3", {"main": best_main, "sub1": best_sub1, "sub2": best_sub2})
+                        if sub3_categories:
+                            best_sub3, sub3_similarity = self.find_best_match(
+                                query_embedding, sub3_categories, {"main": best_main, "sub1": best_sub1, "sub2": best_sub2}
+                            )
+                            if best_sub3:
+                                result["sub3"] = best_sub3
+                                print(f"4. Selected Sub3 Category: {best_sub3}")
+
+        return result
 
 
-def main():
-    # 테스트 실행
-    searcher = HierarchicalCategorySearch()
+def main() -> None:
+    api_key = os.getenv("UPSTAGE_API_KEY")
+    if not api_key:
+        print("Please enter your Upstage API key:")
+        api_key = input().strip()
 
-    # 테스트할 입력값들
+    searcher = HierarchicalCategorySearch(api_key=api_key)
+
     test_inputs = [
         "gaming laptop",
         "organic banana",
