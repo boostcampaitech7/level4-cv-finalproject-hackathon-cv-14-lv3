@@ -1,11 +1,13 @@
 # Environment
 env
 .env
+*lib
 
 # Cache files
 *.pyc
 *.exe
 *.log
+*.bin
 .pytest_cache
 __pycache__/
 
