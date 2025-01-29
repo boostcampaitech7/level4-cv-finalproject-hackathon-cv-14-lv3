@@ -1,27 +1,35 @@
+import json
 import ast
 import sqlite3
+from base64 import b64decode
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import plotly.express as px
 import seaborn as sns
+from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
 
-class AdvancedEmbeddingAnalyzer:
-    def __init__(self, db_path="category_embeddings.db"):
+class EmbeddingAnalyzer:
+    def __init__(self, db_path: str = "category_embeddings.db"):
         self.db_path = db_path
         self.output_dir = Path("embedding_analysis")
         self.output_dir.mkdir(exist_ok=True)
 
+    def deserialize_embedding(self, data: bytes) -> np.ndarray:
+        """Convert base64 encoded bytes back to numpy array"""
+        return np.frombuffer(b64decode(data))
+
     def get_all_embeddings(self) -> tuple[pd.DataFrame, np.ndarray]:
-        """데이터베이스에서 모든 임베딩 가져오기"""
+        """Get all embeddings from database"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        cursor.execute("SELECT main, sub1, sub2, sub3, embedding FROM category_hierarchy")
+        cursor.execute(
+            "SELECT main, sub1, sub2, sub3, embedding FROM category_hierarchy"
+        )
         results = cursor.fetchall()
 
         data = []
@@ -36,10 +44,9 @@ class AdvancedEmbeddingAnalyzer:
         return pd.DataFrame(data), np.array(embeddings)
 
     def analyze_embeddings(self) -> dict:
-        """임베딩 상세 분석"""
+        """Analyze embeddings and generate statistics"""
         categories_df, embeddings = self.get_all_embeddings()
 
-        # 기본 통계
         basic_stats = {
             "차원 수": embeddings.shape[1],
             "카테고리 수": len(embeddings),
@@ -51,7 +58,6 @@ class AdvancedEmbeddingAnalyzer:
             },
         }
 
-        # 카테고리 분석
         category_stats = {
             "메인 카테고리 수": categories_df["main"].nunique(),
             "총 카테고리 경로 수": len(categories_df),
@@ -66,35 +72,41 @@ class AdvancedEmbeddingAnalyzer:
         # 메인 카테고리별 서브카테고리 분포
         main_category_stats = categories_df.groupby("main").agg({"sub1": "nunique", "sub2": "nunique", "sub3": "nunique"}).to_dict()
 
-        return {"basic_stats": basic_stats, "category_stats": category_stats, "main_category_stats": main_category_stats}
+        return {
+            "basic_stats": basic_stats,
+            "category_stats": category_stats,
+            "main_category_stats": main_category_stats,
+        }
 
-    def plot_category_distribution(self, categories_df: pd.DataFrame):
-        """카테고리 분포 시각화"""
+    def plot_category_distribution(self, categories_df: pd.DataFrame) -> None:
+        """Plot category distribution"""
         plt.figure(figsize=(15, 10))
 
-        # 메인 카테고리별 항목 수
         main_counts = categories_df["main"].value_counts()
 
-        # 막대 그래프 생성
         bars = plt.bar(range(len(main_counts)), main_counts.values)
 
-        # 축 레이블 설정
         plt.xticks(range(len(main_counts)), main_counts.index, rotation=45, ha="right")
         plt.xlabel("Main Category")
         plt.ylabel("Number of Items")
         plt.title("Distribution of Items across Main Categories")
 
-        # 값 레이블 추가
         for bar in bars:
             height = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width() / 2.0, height, f"{int(height)}", ha="center", va="bottom")
+            plt.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                height,
+                f"{int(height)}",
+                ha="center",
+                va="bottom",
+            )
 
         plt.tight_layout()
         plt.savefig(self.output_dir / "category_distribution.png")
         plt.close()
 
-    def plot_depth_distribution(self, categories_df: pd.DataFrame):
-        """카테고리 깊이 분포 시각화"""
+    def plot_depth_distribution(self, categories_df: pd.DataFrame) -> None:
+        """Plot category depth distribution"""
         plt.figure(figsize=(10, 6))
 
         depth_counts = categories_df["depth"].value_counts().sort_index()
@@ -106,17 +118,22 @@ class AdvancedEmbeddingAnalyzer:
 
         for bar in bars:
             height = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width() / 2.0, height, f"{int(height)}", ha="center", va="bottom")
+            plt.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                height,
+                f"{int(height)}",
+                ha="center",
+                va="bottom",
+            )
 
         plt.tight_layout()
         plt.savefig(self.output_dir / "depth_distribution.png")
         plt.close()
 
-    def plot_embedding_heatmap(self, embeddings: np.ndarray):
-        """임베딩 값 분포 히트맵"""
+    def plot_embedding_heatmap(self, embeddings: np.ndarray) -> None:
+        """Plot embedding values heatmap"""
         plt.figure(figsize=(15, 8))
 
-        # 임베딩 샘플 선택 (처음 50개)
         sample_size = min(50, len(embeddings))
         sample_embeddings = embeddings[:sample_size]
 
@@ -135,7 +152,7 @@ class AdvancedEmbeddingAnalyzer:
         """t-SNE를 사용한 인터랙티브 시각화"""
         # t-SNE 차원 축소
         tsne = TSNE(n_components=2, random_state=42)
-        embeddings_2d = tsne.fit_transform(embeddings)
+        tsne_result = tsne.fit_transform(embeddings)
 
         # Plotly 시각화
         fig = px.scatter(
@@ -148,59 +165,49 @@ class AdvancedEmbeddingAnalyzer:
 
         fig.write_html(self.output_dir / "tsne_visualization.html")
 
-    def generate_report(self):
-        """분석 리포트 생성"""
+    def generate_report(self) -> None:
+        """Generate comprehensive analysis report"""
         categories_df, embeddings = self.get_all_embeddings()
         analysis_results = self.analyze_embeddings()
 
-        # 모든 시각화 생성
+        # Generate visualizations
         self.plot_category_distribution(categories_df)
         self.plot_depth_distribution(categories_df)
         self.plot_embedding_heatmap(embeddings)
-        self.plot_interactive_tsne(categories_df, embeddings)
+        self.generate_dimensionality_reduction_plots(categories_df, embeddings)
 
-        # 마크다운 리포트 생성
+        # Analyze clusters
+        cluster_results = self.analyze_embedding_clusters(embeddings)
+
+        # Generate report
         report = f"""# Embedding Analysis Report
 
 ## Basic Statistics
-- Dimensions: {analysis_results["basic_stats"]["차원 수"]}
-- Total Categories: {analysis_results["basic_stats"]["카테고리 수"]}
-- Value Range:
-  - Min: {analysis_results["basic_stats"]["값 범위"]["최소"]:.6f}
-  - Max: {analysis_results["basic_stats"]["값 범위"]["최대"]:.6f}
-  - Mean: {analysis_results["basic_stats"]["값 범위"]["평균"]:.6f}
-  - Std: {analysis_results["basic_stats"]["값 범위"]["표준편차"]:.6f}
+{json.dumps(analysis_results["basic_stats"], indent=2, ensure_ascii=False)}
 
 ## Category Statistics
-- Main Categories: {analysis_results["category_stats"]["메인 카테고리 수"]}
-- Total Category Paths: {analysis_results["category_stats"]["총 카테고리 경로 수"]}
-- Subcategories:
-  - Sub1: {analysis_results["category_stats"]["서브카테고리 통계"]["sub1 수"]}
-  - Sub2: {analysis_results["category_stats"]["서브카테고리 통계"]["sub2 수"]}
-  - Sub3: {analysis_results["category_stats"]["서브카테고리 통계"]["sub3 수"]}
+{json.dumps(analysis_results["category_stats"], indent=2, ensure_ascii=False)}
 
-## Category Depth Distribution
-{pd.Series(analysis_results["category_stats"]["depth별 카테고리 수"]).to_markdown()}
+## Cluster Analysis
+{json.dumps(cluster_results, indent=2, ensure_ascii=False)}
 
-## Main Categories Analysis
-{categories_df["main"].value_counts().to_markdown()}
-
-## Visualizations
-The following visualizations have been generated:
+## Visualizations Generated
 1. Category Distribution (category_distribution.png)
 2. Depth Distribution (depth_distribution.png)
 3. Embedding Heatmap (embedding_heatmap.png)
-4. Interactive t-SNE Visualization (tsne_visualization.html)
+4. PCA Visualization (pca_visualization.png)
+5. t-SNE Visualization (tsne_visualization.png)
 """
 
         with open(self.output_dir / "analysis_report.md", "w", encoding="utf-8") as f:
             f.write(report)
 
 
-def main():
-    analyzer = AdvancedEmbeddingAnalyzer()
+def main() -> None:
+    analyzer = EmbeddingAnalyzer()
+    print("Generating embedding analysis report...")
     analyzer.generate_report()
-    print(f"Analysis completed. Results saved in '{analyzer.output_dir}' directory.")
+    print("Analysis completed. Results saved in 'embedding_analysis' directory.")
 
 
 if __name__ == "__main__":
