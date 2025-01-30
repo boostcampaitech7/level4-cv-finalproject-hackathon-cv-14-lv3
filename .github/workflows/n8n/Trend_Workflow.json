@@ -3,30 +3,17 @@
   "nodes": [
     {
       "parameters": {
-        "inputSource": "passthrough"
-      },
-      "id": "c055762a-8fe7-4141-a639-df2372f30060",
-      "typeVersion": 1.1,
-      "name": "Workflow Input Trigger",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "position": [
-        80,
-        680
-      ]
-    },
-    {
-      "parameters": {
-        "text": "={{ $json.query }} {{ $json.chatInput }}",
+        "text": "={{ $json.query }} {{ $json.chatInput }} {{ $json[\"body\"][\"chatInput\"] }} {{ $node[\"Webhook\"].json[\"body\"][\"chatInput\"] }}",
         "schemaType": "manual",
         "inputSchema": "{\n \"type\": \"object\",\n \"properties\": {\n   \"startDate\": {\n     \"type\": \"string\",\n     \"description\": \"조회 시작 날짜 (YYYY-MM-DD 형식, 2016-01-01부터 가능)\"\n   },\n   \"endDate\": {\n     \"type\": \"string\", \n     \"description\": \"조회 종료 날짜 (YYYY-MM-DD 형식)\"\n   },\n   \"timeUnit\": {\n     \"type\": \"string\",\n     \"enum\": [\"date\", \"week\", \"month\"],\n     \"default\": \"month\",\n     \"description\": \"조회 구간 단위 (date: 일간, week: 주간, month: 월간)\"\n   },\n   \"keywordGroups\": {\n     \"type\": \"array\",\n     \"maxItems\": 5,\n     \"items\": {\n       \"type\": \"object\",\n       \"properties\": {\n         \"groupName\": {\n           \"type\": \"string\",\n           \"description\": \"주제어 그룹명\"\n         },\n         \"keywords\": {\n           \"type\": \"array\",\n           \"maxItems\": 20,\n           \"items\": {\n             \"type\": \"string\"\n           },\n           \"description\": \"검색어 목록\"\n         }\n       },\n       \"required\": [\"groupName\", \"keywords\"]\n     },\n     \"description\": \"검색어 그룹 (최대 5개)\"\n   },\n   \"device\": {\n     \"type\": \"string\",\n     \"enum\": [\"\", \"pc\", \"mo\"],\n     \"default\": \"\",\n     \"description\": \"검색 환경 (pc: PC, mo: 모바일, 빈값: 전체)\"\n   },\n   \"gender\": {\n     \"type\": \"string\", \n     \"enum\": [\"\", \"m\", \"f\"],\n     \"default\": \"\",\n     \"description\": \"성별 (m: 남성, f: 여성, 빈값: 전체)\"\n   },\n   \"ages\": {\n     \"type\": \"array\",\n     \"items\": {\n       \"type\": \"string\",\n       \"enum\": [\"1\", \"2\", \"3\", \"4\", \"5\", \"6\", \"7\", \"8\", \"9\", \"10\", \"11\"]\n     },\n     \"default\": [],\n     \"description\": \"연령대 (1: 0-12세, 2: 13-18세, ... 11: 60세 이상, 빈배열: 전체)\"\n   }\n },\n \"required\": [\"startDate\", \"endDate\", \"timeUnit\", \"keywordGroups\"]\n}",
         "options": {
-          "systemPromptTemplate": "You analyze Korean search trend queries and generate structured data for Naver DataLab API.\n\nKey Functions:\n1. Date Processing:\n- Parse year/month/season from query\n- Set date range in YYYY-MM-DD format\n- For historical trends: Include multiple past years' data\n- Default to previous year if unspecified\n\n2. Keyword Group Generation:\n- Create 1-5 logical groups based on query topic\n- Each group needs:\n * groupName: Category or theme\n * keywords: 1-20 related terms\n- For retail/product queries:\n * Group by product categories\n * Include popular brands/variations\n * Consider seasonal trends\n\n3. Target Audience Processing:\n- Extract age groups (convert to [\"1\"-\"11\"])\n- Parse gender preferences\n- Identify device preferences\n\nImportant:\n- All numeric values as strings\n- Dates from 2016-01-01\n- Include relevant audience targeting\n- Group keywords logically"
+          "systemPromptTemplate": "당신은 전문적인 트렌드 분석 AI 어시스턴트입니다. 사용자의 검색 쿼리를 분석하여 Naver DataLab API에 적합한 구조화된 데이터를 생성합니다.\n\n다음은 반드시 따라야 할 규칙입니다:\n\n1. 키워드 그룹 생성:\n- 정확히 5개의 키워드 그룹을 생성해야 합니다\n- 각 그룹은 다음 메인 카테고리 중에서만 선택되어야 합니다:\n  * Appliances\n  * Arts, Crafts & Sewing\n  * Automotive\n  * Baby Products\n  * Beauty & Personal Care\n  * Books\n  * CDs & Vinyl\n  * Cell Phones & Accessories\n  * Clothing, Shoes & Jewelry\n  * Electronics\n  * Grocery & Gourmet Food\n  * Health & Household\n  * Home & Kitchen\n  * Industrial & Scientific\n  * Movies & TV\n  * Musical Instruments\n  * Office Products\n  * Patio, Lawn & Garden\n  * Pet Supplies\n  * Sports & Outdoors\n  * Tools & Home Improvement\n  * Toys & Games\n  * Video Games\n- 예외: 사용자가 위 카테고리에 없는 새로운 제품/서비스에 대해 문의할 경우에만 'etc' 카테고리 사용 가능\n\n2. 각 키워드 그룹의 구성:\n- groupName: 위의 메인 카테고리에서 선택\n- keywords: 각 그룹당 1개 이상-20개 이하의 관련 검색어\n- 계절성, 브랜드, 트렌드를 고려\n\n3. 날짜 처리:\n- 날짜 범위는 YYYY-MM-DD 형식 사용\n- 2016-01-01부터 2025-01-30까지 날짜데이터만 가능\n- 계절성 트렌드 고려\n\n4. 타겟 분석:\n- 연령대 코드:\n  * `1`: 0∼12세\n  * `2`: 13∼18세\n  * `3`: 19∼24세\n  * `4`: 25∼29세\n  * `5`: 30∼34세\n  * `6`: 35∼39세\n  * `7`: 40∼44세\n  * `8`: 45∼49세\n  * `9`: 50∼54세\n  * `10`: 55∼59세\n  * `11`: 60세 이상\n- 성별 선호도 포함\n- 디바이스 사용 패턴 분석\n\n5. 데이터 형식:\n- 모든 숫자는 문자열로 처리\n- 논리적 그룹화 필요"
         }
       },
       "type": "@n8n/n8n-nodes-langchain.informationExtractor",
       "typeVersion": 1,
       "position": [
-        340,
+        300,
         680
       ],
       "id": "0d35cc06-7537-4fd7-aca9-7daa18fc7bdd",
@@ -39,7 +26,7 @@
         "url": "=https://openapi.naver.com/v1/datalab/search",
         "sendHeaders": true,
         "specifyHeaders": "json",
-        "jsonHeaders": "{\n  \"X-Naver-Client-Id\": \"Your-ID\",\n  \"X-Naver-Client-Secret\": \"Your-Secret\",\n  \"Content-Type\": \"application/json\"\n}",
+        "jsonHeaders": "{\n  \"X-Naver-Client-Id\": \"T7I8f00osx33Vc5oA2jZ\",\n  \"X-Naver-Client-Secret\": \"hpPIpgOpfE\",\n  \"Content-Type\": \"application/json\"\n}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json.output }}",
@@ -48,7 +35,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        700,
+        640,
         680
       ],
       "id": "df9079d7-b755-4084-9086-cbaa723da962",
@@ -56,18 +43,35 @@
     },
     {
       "parameters": {
-        "fieldToSplitOut": "results",
-        "include": "allOtherFields",
+        "httpMethod": "POST",
+        "path": "trend",
+        "responseMode": "responseNode",
         "options": {}
       },
-      "type": "n8n-nodes-base.splitOut",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -380,
+        920
+      ],
+      "id": "abd084ec-53ce-4187-b2b4-780d0372ea8d",
+      "name": "Webhook",
+      "webhookId": "6cb7da98-554c-4edf-8a34-71726ec6b882"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "output",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
       "typeVersion": 1,
       "position": [
-        920,
+        820,
         680
       ],
-      "id": "2abd9326-bf7c-4075-bb5c-cc0adf494061",
-      "name": "Split Out"
+      "id": "25ed3c14-0592-4dc6-9ca9-029ab1bc28ed",
+      "name": "Aggregate"
     },
     {
       "parameters": {
@@ -83,37 +87,156 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.2,
       "position": [
-        360,
-        860
+        760,
+        940
       ],
-      "id": "87cb4686-6c3a-4f27-82ec-53aa788460db",
-      "name": "Solar Chat Model",
+      "id": "20284af6-0f70-42e0-b100-a8ff25c04b37",
+      "name": "\bSolar Chat Model",
       "credentials": {
         "openAiApi": {
           "id": "1NzrEJLMzjNtK0g8",
-          "name": "OpenAi account"
+          "name": "Solar"
         }
       }
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1360,
+        920
+      ],
+      "id": "97baad43-f02e-4a24-99d1-d6436c432d74",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.text }}",
+                    "rightValue": "callAPI",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "d6bdc43b-ef58-46b5-971b-3de4334586ff",
+                    "leftValue": "={{ $json.text }}",
+                    "rightValue": "chat",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        100,
+        920
+      ],
+      "id": "091d8c64-3fdf-4e1d-be63-b5e50b985cee",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json[\"body\"][\"chatInput\"] }} {{ $node[\"Webhook\"].json[\"body\"][\"chatInput\"] }}",
+        "options": {
+          "systemMessage": "당신은 검색어 트렌드 분석 전문 AI 어시스턴트입니다. 사용자가 네이버 데이터랩 API를 효과적으로 활용할 수 있도록 도와주는 역할을 합니다.\n\n주요 기능:\n1. 검색어 트렌드 분석 지원\n- 시간 단위별 검색량 분석 (일간/주간/월간)\n- 검색어간 상대적 검색량 비교\n- 기간별 검색 트렌드 변화 파악\n- 분석 가능 기간: 2016년 1월 1일부터 현재까지\n\n2. 매장 카테고리 기반 검색 지원\n기존 카테고리:\n- Appliances (가전제품)\n- Arts, Crafts & Sewing (예술, 공예)\n- Automotive (자동차용품)\n- Baby Products (유아용품)\n- Beauty & Personal Care (뷰티, 개인용품)\n- Books (도서)\n- CDs & Vinyl (음반)\n- Cell Phones & Accessories (휴대폰, 액세서리)\n- Clothing, Shoes & Jewelry (의류, 신발, 쥬얼리)\n- Electronics (전자제품)\n- Grocery & Gourmet Food (식품)\n- Health & Household (건강, 생활용품)\n- Home & Kitchen (홈, 주방용품)\n- Industrial & Scientific (산업, 과학용품)\n- Movies & TV (영화, TV)\n- Musical Instruments (악기)\n- Office Products (사무용품)\n- Patio, Lawn & Garden (정원용품)\n- Pet Supplies (반려동물용품)\n- Sports & Outdoors (스포츠, 아웃도어)\n- Tools & Home Improvement (공구, 홈개선)\n- Toys & Games (장난감, 게임)\n- Video Games (비디오게임)\n\n3. 새로운 트렌드 카테고리 추천\n- 기존 카테고리 외 새로운 상품/서비스 트렌드 제안\n- 시장 변화에 따른 신규 카테고리 발굴\n\n4. 분석 옵션\n- 특정 연령대별 검색 트렌드 분석 가능\n- 기간별 검색량 변화 추이 분석\n- 카테고리별 인기 검색어 비교\n\n응답 지침:\n1. 사용자가 검색어나 카테고리만 언급할 경우, 구체적인 기간 설정을 요청하세요.\n2. 검색 기간은 연도와 월/계절 정보를 포함해야 합니다. (예: \"2024년 12월\", \"2023년 여름\")\n3. 분석하고자 하는 시간 단위(일간/주간/월간)를 명확히 해주세요.\n4. 특정 연령대 분석이 필요한 경우 타겟층을 구체적으로 물어보세요.\n5. 답변은 항상 한국어로 제공하며, 친절하고 전문적인 어조를 유지하세요.\n\n모든 데이터 분석과 추천은 사용자의 의사결정을 돕기 위한 것이며, 최종 선택은 사용자의 판단에 맡깁니다."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        300,
+        1080
+      ],
+      "id": "b896aff9-1b20-485f-adcc-9d7fd8b3d279",
+      "name": "TrendGuide Agent"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.output }}",
+        "options": {
+          "systemMessage": "당신은 검색어 트렌드를 분석하고 이를 기반으로 상품을 추천하는 전문 AI 어시스턴트입니다.\n\n분석 및 추천 프로세스:\n\n1. 트렌드 데이터 분석\n- 입력 데이터 구조:\n  * startDate: 검색 기간 시작일 (yyyy-mm-dd)\n  * endDate: 검색 기간 종료일 (yyyy-mm-dd)\n  * timeUnit: 시간 단위\n  * results.title: 주제 키워드\n  * results.keywords: 연관 검색어\n  * results.data.period: 구간별 시작일 (yyyy-mm-dd)\n  * results.data.ratio: 구간별 검색량 상대비율 (최대값 100 기준)\n\n2. 트렌드 평가 기준:\n- 검색량 증가율 (전월 대비, 전년 대비)\n- 연관 검색어의 다양성과 관련성\n- 계절성 요인 고려\n- 지속성 여부 판단\n\n3. 상품 추천 로직:\n- 트렌드 키워드와 매장 카테고리 매칭\n- 다음 카테고리 내에서 관련 상품 검색:\n  * Appliances\n  * Arts, Crafts & Sewing\n  * Automotive\n  * Baby Products\n  * Beauty & Personal Care\n  * Books\n  * CDs & Vinyl\n  * Cell Phones & Accessories\n  * Clothing, Shoes & Jewelry\n  * Electronics\n  * Grocery & Gourmet Food\n  * Health & Household\n  * Home & Kitchen\n  * Industrial & Scientific\n  * Movies & TV\n  * Musical Instruments\n  * Office Products\n  * Patio, Lawn & Garden\n  * Pet Supplies\n  * Sports & Outdoors\n  * Tools & Home Improvement\n  * Toys & Games\n  * Video Games\n\n4. 고려 사항:\n- 상위 트렌드 키워드와 성장세\n- 연관 검색어 패턴\n- 카테고리별 구체적 상품 추천\n- 타겟 고객층 분석:\n  * 연령대 (`1`: 0∼12세, `2`: 13∼18세, `3`: 19∼24세, `4`: 25∼29세, \n    `5`: 30∼34세, `6`: 35∼39세, `7`: 40∼44세, `8`: 45∼49세, \n    `9`: 50∼54세, `10`: 55∼59세, `11`: 60세 이상)\n  * 성별 선호도\n  * 주요 구매 시기\n\n사용자의 입력 데이터를 기반으로 현재 가장 주목받는 트렌드를 분석하고, 이를 바탕으로 실제 구매 가능한 상품을 자연스러운 대화체로 추천합니다. 시장 트렌드와 실제 구매 가능성을 모두 고려하여 객관적이고 실용적인 제안을 제공합니다."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1020,
+        680
+      ],
+      "id": "640506bc-657b-441d-91b7-d814ae270d5b",
+      "name": "Trend Agent"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json[\"body\"][\"chatInput\"] }} {{ $json.query }} {{ $json.chatInput }} ",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=당신은 네이버 검색어 search api 요청이 필요한지 아닌지 분류하는 어시스턴트입니다. 사용자가 명령 또는 부탁하는 어조로 조회기간에 대한 내용을 포함해 정확한 정보를 요하는 질문이면 'callAPI', 질문형태로 사용자와 대화를 더 요하는 질문이면 'chat'로 구분해서 대답해주세요."
+            }
+          ]
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        -220,
+        920
+      ],
+      "id": "c3ea5dc6-e97f-4a96-92db-773ae28d68ed",
+      "name": "QueryClassifier"
     }
   ],
   "pinData": {},
   "connections": {
-    "Workflow Input Trigger": {
-      "main": [
-        [
-          {
-            "node": "Information Extractor",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Naver Datalab API Request": {
       "main": [
         [
           {
-            "node": "Split Out",
+            "node": "Aggregate",
             "type": "main",
             "index": 0
           }
@@ -131,12 +254,100 @@
         ]
       ]
     },
-    "Solar Chat Model": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "QueryClassifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Trend Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\bSolar Chat Model": {
       "ai_languageModel": [
         [
           {
+            "node": "Trend Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "TrendGuide Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "QueryClassifier",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
             "node": "Information Extractor",
             "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TrendGuide Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TrendGuide Agent": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trend Agent": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QueryClassifier": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
             "index": 0
           }
         ]
@@ -147,7 +358,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "8d481f67-051c-4dcd-acfb-7f8f16d1ff9a",
+  "versionId": "0bc66829-e62c-49c7-9f88-3995737d2ee6",
   "meta": {
     "templateId": "VMiAxXa3lCAizGB5f7dVZQSFfg3FtHkdTKvLuupqBls=",
     "templateCredsSetupCompleted": true,
