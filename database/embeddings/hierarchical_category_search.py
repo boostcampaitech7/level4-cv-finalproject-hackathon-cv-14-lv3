@@ -1,55 +1,44 @@
-import pickle
-import sqlite3
+import os
 
 import numpy as np
+from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
+from supabase import Client, create_client
 
 
 class HierarchicalCategorySearch:
-    def __init__(self, db_path: str = "category_embeddings_MiniLM.db"):
+    def __init__(self, supabase_url: str, supabase_key: str):
         self.model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-        self.db_path = db_path
+        self.supabase: Client = create_client(supabase_url, supabase_key)
 
-    def get_unique_values(self, level: str, parent_conditions: dict[str, str] = None) -> list[str]:
+    def get_unique_values(self, level: str, parent_conditions: dict[str, str] | None = None) -> list[str]:
         """특정 레벨의 고유한 값들을 가져옴"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
-        query = f'SELECT DISTINCT {level} FROM category_hierarchy WHERE {level} != ""'
+        query = self.supabase.table("product_info").select(f"{level}::text").neq(level, "")
 
         if parent_conditions:
-            conditions = [f"{k} = ?" for k in parent_conditions.keys()]
-            query += f" AND {' AND '.join(conditions)}"
-            cursor.execute(query, list(parent_conditions.values()))
-        else:
-            cursor.execute(query)
+            for key, value in parent_conditions.items():
+                query = query.eq(key, value)
 
-        values = [row[0] for row in cursor.fetchall()]
-        conn.close()
-        return values
+        result = query.execute()
 
-    def get_embedding_for_category(self, category_values: dict[str, str]) -> np.ndarray:
+        # 결과에서 중복을 제거합니다
+        unique_values = list(set(row[level] for row in result.data if row[level]))
+        return sorted(unique_values)  # 정렬된 결과 반환
+
+    def get_embedding_for_category(self, category_values: dict[str, str]) -> np.ndarray | None:
         """특정 카테고리 조합의 임베딩을 가져옴"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        query = self.supabase.table("product_info").select("embedding")
 
-        conditions = [f"{k} = ?" for k in category_values.keys()]
-        query = f"""
-        SELECT embedding
-        FROM category_hierarchy
-        WHERE {" AND ".join(conditions)}
-        """
+        for key, value in category_values.items():
+            query = query.eq(key, value)
 
-        cursor.execute(query, list(category_values.values()))
-        result = cursor.fetchone()
+        result = query.execute()
 
-        if result:
-            embedding = pickle.loads(result[0])
-        else:
-            embedding = None
-
-        conn.close()
-        return embedding
+        if result.data:
+            # Supabase에서는 이미 리스트 형태로 저장되어 있으므로 바로 numpy array로 변환
+            embedding = np.array(result.data[0]["embedding"])
+            return embedding
+        return None
 
     def find_best_category(self, input_text: str) -> dict[str, str]:
         """입력 텍스트에 대한 최적의 카테고리 조합을 찾음"""
@@ -118,8 +107,13 @@ class HierarchicalCategorySearch:
 
 
 def main():
+    # Supabase 연결 정보
+    load_dotenv()
+    url: str = os.getenv("SUPABASE_URL")
+    key: str = os.getenv("SUPABASE_KEY")
+
     # 테스트 실행
-    searcher = HierarchicalCategorySearch()
+    searcher = HierarchicalCategorySearch(url, key)
 
     # 테스트할 입력값들
     test_inputs = [

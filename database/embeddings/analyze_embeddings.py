@@ -1,4 +1,4 @@
-import pickle
+import ast
 import sqlite3
 from pathlib import Path
 
@@ -31,8 +31,7 @@ class AdvancedEmbeddingAnalyzer:
             depth = len(list(filter(None, [main, sub1, sub2, sub3])))
 
             data.append({"path": path, "main": main, "sub1": sub1, "sub2": sub2, "sub3": sub3, "depth": depth})
-            embeddings.append(pickle.loads(emb_blob))
-
+            embeddings.append(ast.literal_eval(emb_blob))
         conn.close()
         return pd.DataFrame(data), np.array(embeddings)
 
