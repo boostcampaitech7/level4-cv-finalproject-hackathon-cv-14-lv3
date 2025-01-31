@@ -1,3 +1,4 @@
+import ast
 import os
 import pickle
 import sqlite3
@@ -20,7 +21,7 @@ class CategoryEmbeddingSystem:
 
         # 계층 구조를 저장하는 테이블
         c.execute("""
-        CREATE TABLE IF NOT EXISTS category_hierarchy
+        CREATE TABLE IF NOT EXISTS product_info
         (id INTEGER PRIMARY KEY,
          main TEXT,
          sub1 TEXT,
@@ -31,10 +32,10 @@ class CategoryEmbeddingSystem:
         """)
 
         # 각 레벨별 인덱스 생성
-        c.execute("CREATE INDEX IF NOT EXISTS idx_main ON category_hierarchy(main)")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_sub1 ON category_hierarchy(sub1)")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_sub2 ON category_hierarchy(sub2)")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_sub3 ON category_hierarchy(sub3)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_main ON product_info(main)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_sub1 ON product_info(sub1)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_sub2 ON product_info(sub2)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_sub3 ON product_info(sub3)")
 
         conn.commit()
         conn.close()
@@ -94,7 +95,7 @@ class CategoryEmbeddingSystem:
                 embedding_blob = pickle.dumps(embedding)
                 cursor.execute(
                     """
-                INSERT OR REPLACE INTO category_hierarchy
+                INSERT OR REPLACE INTO product_info
                 (main, sub1, sub2, sub3, embedding)
                 VALUES (?, ?, ?, ?, ?)
                 """,
@@ -115,11 +116,11 @@ class CategoryEmbeddingSystem:
         # 데이터베이스에서 모든 카테고리와 임베딩 검색
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        cursor.execute("SELECT main, sub1, sub2, sub3, embedding FROM category_hierarchy")
+        cursor.execute("SELECT main, sub1, sub2, sub3, embedding FROM product_info")
 
         similarities = []
         for main, sub1, sub2, sub3, embedding_blob in cursor.fetchall():
-            embedding = pickle.loads(embedding_blob)
+            embedding = ast.literal_eval(embedding_blob)
             similarity = np.dot(query_embedding, embedding) / (np.linalg.norm(query_embedding) * np.linalg.norm(embedding))
 
             # 계층 구조를 유지하면서 카테고리 경로 생성
