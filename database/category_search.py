@@ -84,15 +84,23 @@ class HierarchicalCategorySearch:
         """LLM을 사용하여 주어진 후보들 중에서 가장 적합한 카테고리를 찾음"""
         if not candidates:
             return None
+        prompt = f"""You are a product categorization expert for an e-commerce platform.
+        Your task is to classify the given product into the most appropriate category.
 
-        prompt = f"""
-Given the input text: "{query}"
-{f"Context: {context}" if context else ""}
+Product to categorize: "{query}"
+{f"Current hierarchy: {context}" if context else ""}
 
-Please select the most appropriate category from the following options:
+Available categories:
 {", ".join(candidates)}
 
-Return only the category name without any explanation or additional text.
+Key instructions:
+1. First identify the product's basic type (Is it food? electronics? clothing? etc.)
+2. Consider the product's main purpose and features
+3. Choose the MOST SPECIFIC category that correctly matches the product
+4. Ensure logical consistency with any existing category path
+5. When in doubt, prioritize obvious category matches over subtle distinctions
+
+Return ONLY the exact category name from the available options. No explanation or additional text.
 """
 
         messages = [{"role": "user", "content": prompt}]
