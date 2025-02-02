@@ -15,11 +15,12 @@ class SupabaseMigrator:
         self.supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 
     def get_table_row_count(self, cursor: sqlite3.Cursor, table_name: str) -> int:
-        cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+        cursor.execute("SELECT COUNT(*) FROM ?", (table_name,))
         return cursor.fetchone()[0]
 
     def get_ordered_batch(self, cursor: sqlite3.Cursor, table_name: str, batch_size: int, offset: int) -> list[tuple]:
-        cursor.execute(f"SELECT * FROM {table_name} ORDER BY id LIMIT ? OFFSET ?", (batch_size, offset))
+        """배치 데이터를 안전하게 조회"""
+        cursor.execute("SELECT * FROM ? ORDER BY id LIMIT ? OFFSET ?", (table_name, batch_size, offset))
         return cursor.fetchall()
 
     def transform_product_info(self, rows: list[tuple]) -> list[dict[str, Any]]:
@@ -89,7 +90,7 @@ class SupabaseMigrator:
             return 0
 
         try:
-            result = self.supabase.table(table_name).upsert(batch_data).execute()
+            self.supabase.table(table_name).upsert(batch_data).execute()
             return len(batch_data)
         except Exception as e:
             print(f"\nError during upload to {table_name}: {e}")
