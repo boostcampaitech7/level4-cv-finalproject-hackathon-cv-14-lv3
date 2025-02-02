@@ -11,13 +11,13 @@ def convert_to_sqlite():
 
     # Split data
     print("Processing product info...")
-    product_info = df[["ID", "Main", "Sub1", "Sub2", "Sub3"]]
+    product_info = df[["id", "main", "sub1", "sub2", "sub3"]]
     time_series_columns = [col for col in df.columns if col.startswith("202")]
-    time_series_data = df[["ID", *time_series_columns]]
+    time_series_data = df[["id", *time_series_columns]]
 
     # Create empty recall information table
     print("Creating empty recall information table...")
-    recall_info = pd.DataFrame(columns=["ID", "product", "model", "name_of_company", "recall_type", "barcode", "announcement_date"])
+    recall_info = pd.DataFrame(columns=["id", "product", "model", "name_of_company", "recall_type", "barcode", "announcement_date"])
 
     # Convert negative values to positive using absolute value
     print("Converting negative values to absolute values...")
