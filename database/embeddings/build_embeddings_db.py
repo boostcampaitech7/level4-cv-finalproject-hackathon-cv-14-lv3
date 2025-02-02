@@ -1,4 +1,3 @@
-import ast
 import os
 import pickle
 import sqlite3
@@ -23,11 +22,11 @@ class CategoryEmbeddingSystem:
         c.execute("""
         CREATE TABLE IF NOT EXISTS product_info
         (id INTEGER PRIMARY KEY,
-         main TEXT,
-         sub1 TEXT,
-         sub2 TEXT,
-         sub3 TEXT,
-         embedding BLOB,
+         main TEXT NOT NULL,
+         sub1 TEXT NOT NULL,
+         sub2 TEXT NOT NULL,
+         sub3 TEXT NOT NULL,
+         embedding BLOB NOT NULL,
          UNIQUE(main, sub1, sub2, sub3))
         """)
 
@@ -40,32 +39,70 @@ class CategoryEmbeddingSystem:
         conn.commit()
         conn.close()
 
+    def _clean_category(self, value: str) -> str | None:
+        """Clean category value and return None if invalid"""
+        if pd.isna(value) or value.strip().lower() == "nan":
+            return None
+        cleaned = value.strip()
+        return cleaned if cleaned else None
+
+    def _get_valid_category_tuple(self, row: pd.Series) -> tuple[str, str | None, str | None, str | None] | None:
+        """Convert row to clean category tuple, return None if invalid"""
+        main = self._clean_category(str(row["Main"]))
+        if not main:
+            return None
+
+        sub1 = self._clean_category(str(row["Sub1"]))
+        sub2 = self._clean_category(str(row["Sub2"]))
+        sub3 = self._clean_category(str(row["Sub3"]))
+
+        # Ensure hierarchy is valid (no gaps)
+        if sub2 and not sub1:
+            return None
+        if sub3 and not (sub1 and sub2):
+            return None
+
+        return (main, sub1, sub2, sub3)
+
+    def _collect_valid_hierarchies(
+        self, category_tuple: tuple[str, str | None, str | None, str | None]
+    ) -> set[tuple[str, str | None, str | None, str | None]]:
+        """Collect all valid hierarchical combinations from a category tuple"""
+        main, sub1, sub2, sub3 = category_tuple
+        hierarchies = {(main, None, None, None)}
+
+        if sub1:
+            hierarchies.add((main, sub1, None, None))
+            if sub2:
+                hierarchies.add((main, sub1, sub2, None))
+                if sub3:
+                    hierarchies.add((main, sub1, sub2, sub3))
+
+        return hierarchies
+
     def process_categories(self, csv_path: str):
         """Process CSV file and store embeddings with hierarchy"""
         print(f"Reading CSV file: {csv_path}")
         df = pd.read_csv(csv_path)
 
-        # 중복 제거를 위한 집합
-        unique_categories = set()
+        # 데이터프레임에서 직접 정렬된 카테고리 추출
+        df_sorted = df.sort_values(["Main", "Sub1", "Sub2"])
 
-        # 각 계층별 카테고리 조합 수집
-        for _, row in df.iterrows():
+        # 정렬된 순서로 카테고리 조합 수집
+        categories = []
+        seen = set()  # 중복 체크용
+
+        for _, row in df_sorted.iterrows():
             main = str(row["Main"]).strip()
             sub1 = str(row["Sub1"]).strip()
             sub2 = str(row["Sub2"]).strip()
             sub3 = str(row["Sub3"]).strip()
 
-            if main.lower() != "nan":
-                unique_categories.add((main, "", "", ""))
-                if sub1.lower() != "nan":
-                    unique_categories.add((main, sub1, "", ""))
-                    if sub2.lower() != "nan":
-                        unique_categories.add((main, sub1, sub2, ""))
-                        if sub3.lower() != "nan":
-                            unique_categories.add((main, sub1, sub2, sub3))
-
-        categories = list(unique_categories)
-        print(f"Found {len(categories)} unique category combinations")
+            category_tuple = (main, sub1, sub2, sub3)
+            if category_tuple not in seen:
+                categories.append(category_tuple)
+                seen.add(category_tuple)
+        print(f"Found {len(categories)} valid unique category combinations")
 
         # 배치 처리로 임베딩 계산 및 저장
         batch_size = 32
@@ -77,14 +114,7 @@ class CategoryEmbeddingSystem:
             # 각 카테고리 조합에 대한 텍스트 생성
             texts = []
             for main, sub1, sub2, sub3 in batch:
-                text = main
-                if sub1:
-                    text += f" > {sub1}"
-                if sub2:
-                    text += f" > {sub2}"
-                if sub3:
-                    text += f" > {sub3}"
-                texts.append(text)
+                texts.append(f"{main} > {sub1} > {sub2} > {sub3}")
 
             # 임베딩 계산
             embeddings = self.model.encode(texts)
@@ -95,10 +125,10 @@ class CategoryEmbeddingSystem:
                 embedding_blob = pickle.dumps(embedding)
                 cursor.execute(
                     """
-                INSERT OR REPLACE INTO product_info
-                (main, sub1, sub2, sub3, embedding)
-                VALUES (?, ?, ?, ?, ?)
-                """,
+                    INSERT OR REPLACE INTO product_info
+                    (main, sub1, sub2, sub3, embedding)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
                     (main, sub1, sub2, sub3, embedding_blob),
                 )
 
@@ -120,24 +150,26 @@ class CategoryEmbeddingSystem:
 
         similarities = []
         for main, sub1, sub2, sub3, embedding_blob in cursor.fetchall():
-            embedding = ast.literal_eval(embedding_blob)
+            embedding = pickle.loads(embedding_blob)  # noqa: S301
             similarity = np.dot(query_embedding, embedding) / (np.linalg.norm(query_embedding) * np.linalg.norm(embedding))
 
             # 계층 구조를 유지하면서 카테고리 경로 생성
-            category_path = main
+            category_parts = [main]
             if sub1:
-                category_path += f" > {sub1}"
+                category_parts.append(sub1)
             if sub2:
-                category_path += f" > {sub2}"
+                category_parts.append(sub2)
             if sub3:
-                category_path += f" > {sub3}"
+                category_parts.append(sub3)
+
+            category_path = " > ".join(category_parts)
 
             similarities.append(
                 {
                     "main": main,
-                    "sub1": sub1 if sub1 else None,
-                    "sub2": sub2 if sub2 else None,
-                    "sub3": sub3 if sub3 else None,
+                    "sub1": sub1,
+                    "sub2": sub2,
+                    "sub3": sub3,
                     "path": category_path,
                     "similarity": float(similarity),
                 }

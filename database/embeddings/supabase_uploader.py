@@ -1,101 +1,110 @@
-import ast
 import os
+import pickle
 import sqlite3
+from typing import Any
 
-from supabase import Client, create_client
-
-# Supabase 연결 정보
-url: str = os.getenv("SUPABASE_URL")
-key: str = os.getenv("SUPABASE_KEY")
-
-
-# Supabase 클라이언트 생성
-supabase: Client = create_client(url, key)
-
-# SQLite DB 연결
-conn = sqlite3.connect("category_embeddings_MiniLM.db")
-cursor = conn.cursor()
-
-# 전체 데이터 수 확인
-cursor.execute("SELECT COUNT(*) FROM product_info")
-total_rows = cursor.fetchone()[0]
-print(f"Total rows to process: {total_rows}")
+from dotenv import load_dotenv
+from supabase import create_client
+from tqdm import tqdm
 
 
-def process_embedding(embedding_bytes):
-    """
-    직렬화된 embedding 데이터를 float32 배열로 변환
-    """
-    try:
-        numpy_array = ast.literal_eval(embedding_bytes)
-
-        return numpy_array.tolist()
-    except Exception as e:
-        print(f"Error processing embedding: {e}")
-        return None
+def get_total_rows(cursor: sqlite3.Cursor) -> int:
+    """Get total number of rows in the database"""
+    cursor.execute("SELECT COUNT(*) FROM product_info")
+    return cursor.fetchone()[0]
 
 
-# 첫 번째 row 테스트
-cursor.execute("SELECT * FROM product_info LIMIT 1")
-test_row = cursor.fetchone()
-print("\nTesting first row:")
-print("ID:", test_row[0])
-print("Main category:", test_row[1])
-processed_test = process_embedding(test_row[5])
-print("Embedding dimension:", len(processed_test) if processed_test else None)
-
-# 데이터 처리 및 업로드
-batch_size = 100
-successful_uploads = 0
-errors = 0
-
-for offset in range(0, total_rows, batch_size):
-    try:
-        cursor.execute(
-            """
-            SELECT id, main, sub1, sub2, sub3, embedding
-            FROM product_info
-            LIMIT ? OFFSET ?
+def get_ordered_batch(cursor: sqlite3.Cursor, batch_size: int, offset: int) -> list[tuple]:
+    """Get ordered batch of data from SQLite"""
+    cursor.execute(
+        """
+        SELECT id, main, sub1, sub2, sub3, embedding
+        FROM product_info
+        ORDER BY main, sub1, sub2
+        LIMIT ? OFFSET ?
         """,
-            (batch_size, offset),
-        )
+        (batch_size, offset),
+    )
+    return cursor.fetchall()
 
-        batch_rows = cursor.fetchall()
-        data_batch = []
 
-        for row in batch_rows:
-            processed_embedding = process_embedding(row[5])
-            if processed_embedding is not None:
-                data = {
-                    "id": str(row[0]),
-                    "main": row[1],
-                    "sub1": row[2] if row[2] is not None else "",
-                    "sub2": row[3] if row[3] is not None else "",
-                    "sub3": row[4] if row[4] is not None else "",
-                    "embedding": processed_embedding,
-                }
-                data_batch.append(data)
+def transform_batch_data(rows: list[tuple]) -> list[dict[str, Any]]:
+    """Transform SQLite rows into Supabase compatible format"""
+    return [
+        {
+            "id": str(row[0]),
+            "main": row[1],
+            "sub1": row[2],
+            "sub2": row[3],
+            "sub3": row[4],
+            "embedding": pickle.loads(row[5]).tolist(),  # noqa: S301
+        }
+        for row in rows
+    ]
 
-        if data_batch:
-            try:
-                result = supabase.table("product_info").insert(data_batch).execute()
-                successful_uploads += len(data_batch)
-            except Exception as e:
-                print(f"\nUpload error for batch at offset {offset}:")
-                print(f"Error message: {e!s}")
-                errors += 1
 
-        print(f"Processed {min(offset + batch_size, total_rows)}/{total_rows} rows...")
-        print(f"Successfully uploaded: {successful_uploads}")
-        print(f"Errors: {errors}")
+def upload_batch_to_supabase(supabase, batch_data: list[dict[str, Any]]) -> int:
+    """Upload a batch of data to Supabase"""
+    if not batch_data:
+        return 0
 
+    try:
+        # 기존 데이터 삭제 (ID가 중복되는 경우)
+        ids = [row["id"] for row in batch_data]
+        supabase.table("product_info").delete().in_("id", ids).execute()
+
+        # 새 데이터 삽입
+        result = supabase.table("product_info").insert(batch_data).execute()  # noqa: F841
+        return len(batch_data)
     except Exception as e:
-        errors += 1
-        print(f"Processing error at batch starting at row {offset}: {e!s}")
+        print(f"\nError during upload: {e!s}")
+        return 0
 
-conn.close()
 
-print("\nUpload completed!")
-print(f"Total processed: {total_rows}")
-print(f"Successfully uploaded: {successful_uploads}")
-print(f"Failed: {errors}")
+def upload_category_data(db_path: str, batch_size: int = 100):
+    """카테고리 데이터를 Supabase에 업로드"""
+    # 환경 설정
+    load_dotenv()
+    supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+
+    # DB 연결 및 초기화
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        total_rows = get_total_rows(cursor)
+        successful = 0
+        errors = 0
+
+        # 데이터 처리 및 업로드
+        with tqdm(total=total_rows, desc="Uploading") as pbar:
+            for offset in range(0, total_rows, batch_size):
+                try:
+                    # 정렬된 배치 데이터 가져오기
+                    rows = get_ordered_batch(cursor, batch_size, offset)
+
+                    # 데이터 변환
+                    batch_data = transform_batch_data(rows)
+
+                    # 데이터 업로드
+                    uploaded = upload_batch_to_supabase(supabase, batch_data)
+                    successful += uploaded
+
+                    if uploaded < len(batch_data):
+                        errors += 1
+
+                    pbar.update(len(batch_data))
+                    pbar.set_postfix({"success": successful, "errors": errors})
+
+                except Exception as e:
+                    print(f"\nError at offset {offset}: {e!s}")
+                    errors += 1
+                    pbar.update(batch_size)
+
+        return total_rows, successful, errors
+
+
+if __name__ == "__main__":
+    total, success, fails = upload_category_data("category_embeddings_MiniLM.db")
+    print("\nUpload completed!")
+    print(f"Total processed: {total}")
+    print(f"Successfully uploaded: {success}")
+    print(f"Failed: {fails}")
