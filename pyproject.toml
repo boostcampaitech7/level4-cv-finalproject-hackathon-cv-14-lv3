@@ -47,6 +47,7 @@ build-backend = "poetry.core.masonry.api"
 [tool.ruff]
 line-length = 140
 target-version = "py310"
+ignore = ["S104"]
 
 lint.select = [
     "E",    # pycodestyle
