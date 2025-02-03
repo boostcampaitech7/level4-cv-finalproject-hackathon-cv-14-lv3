@@ -452,9 +452,6 @@ files = [
     {file = "colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"},
     {file = "colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44"},
 ]
-<<<<<<< HEAD
-markers = {main = "(sys_platform == \"win32\" or platform_system == \"Windows\") and python_version <= \"3.11\"", dev = "python_version <= \"3.11\" and sys_platform == \"win32\""}
-=======
 markers = {main = "sys_platform == \"win32\" and python_version <= \"3.11\" or platform_system == \"Windows\" and python_version <= \"3.11\"", dev = "python_version <= \"3.11\" and sys_platform == \"win32\""}
 
 [[package]]
@@ -547,7 +544,6 @@ docs = ["furo", "sphinx (>=7.2)", "sphinx-copybutton"]
 mypy = ["contourpy[bokeh,docs]", "docutils-stubs", "mypy (==1.11.1)", "types-Pillow"]
 test = ["Pillow", "contourpy[test-no-images]", "matplotlib"]
 test-no-images = ["pytest", "pytest-cov", "pytest-rerunfailures", "pytest-xdist", "wurlitzer"]
->>>>>>> origin/main
 
 [[package]]
 name = "coverage"
