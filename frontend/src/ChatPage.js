@@ -97,7 +97,12 @@ const ChatPage = () => {
           </div>
         )}
         <div style={chat.sender === 'user' ? styles.userMessage : styles.botMessage}>
-          {chat.content}
+          {chat.content.split("\n").map((line, i) => (
+            <React.Fragment key={i}>
+              {line}
+              <br />
+            </React.Fragment>
+          ))}
         </div>
       </div>
       {/* 버튼을 별도 컨테이너로 분리 */}
@@ -119,6 +124,7 @@ const ChatPage = () => {
       )}
     </>
   );
+  
 
   return (
     <div style={styles.page}>
