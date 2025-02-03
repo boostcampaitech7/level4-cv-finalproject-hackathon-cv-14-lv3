@@ -1,5 +1,5 @@
-import json
 import ast
+import json
 import sqlite3
 from base64 import b64decode
 from pathlib import Path
@@ -7,8 +7,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import plotly.express as px
 import seaborn as sns
-from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
 
@@ -152,7 +152,7 @@ class EmbeddingAnalyzer:
         """t-SNE를 사용한 인터랙티브 시각화"""
         # t-SNE 차원 축소
         tsne = TSNE(n_components=2, random_state=42)
-        tsne_result = tsne.fit_transform(embeddings)
+        embeddings_2d = tsne.fit_transform(embeddings)
 
         # Plotly 시각화
         fig = px.scatter(

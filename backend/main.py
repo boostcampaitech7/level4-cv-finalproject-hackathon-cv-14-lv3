@@ -1,16 +1,12 @@
+import os
+
+import httpx
+import pandas as pd
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import httpx
-from datetime import datetime
-import pandas as pd
-import sqlalchemy
-import re
-from dotenv import load_dotenv
-import os
-import requests
-import json
 from openai import OpenAI
-from supabase import create_client 
+from supabase import create_client
 
 # 1) FastAPI 앱 생성
 app = FastAPI()
@@ -51,14 +47,14 @@ def load_sales_data():
         )
     """).execute()
     df = pd.DataFrame(response.data)
-    
+
     # 중첩된 product_info 데이터를 풀어서 새로운 컬럼으로 만듦
     df['대분류'] = df['product_info'].apply(lambda x: x['sub1'] if x else None)
     df['소분류'] = df['product_info'].apply(lambda x: x['sub3'] if x else None)
-    
+
     # product_info 컬럼 제거
     df = df.drop('product_info', axis=1)
-    
+
     return df
 
 def load_quantity_data():
@@ -254,19 +250,19 @@ def get_category_pie():
 def get_low_stock():
     # merged_df와 low_stock_df가 전역 변수로 정의되어 있는지 확인
     global merged_df, low_stock_df
-    
+
     try:
         # product_info 테이블에서 sub3 정보 가져오기
         response = supabase.table('product_info').select("id", "sub3").execute()
         product_info = pd.DataFrame(response.data)
         product_info = product_info.rename(columns={'id': 'id', 'sub3': 'Sub3'})
-        
+
         # low_stock_df와 product_info 병합
         merged_low_stock = pd.merge(low_stock_df, product_info, on='id', how='left')
-        
+
         return merged_low_stock.to_dict(orient="records")
     except Exception as e:
-        print(f"Error in get_low_stock: {str(e)}")
+        print(f"Error in get_low_stock: {e!s}")
         return {"error": str(e)}
 
 @app.get("/api/rising-subcategories")
@@ -283,18 +279,18 @@ def get_topbottom():
         # Supabase에서 product_info 데이터 가져오기
         response = supabase.table('product_info').select("id", "sub3").execute()
         product_info = pd.DataFrame(response.data)
-        
+
         # ID 컬럼을 문자열로 변환
         product_info['id'] = product_info['id'].astype(str)
         product_info = product_info.rename(columns={'id': 'ID', 'sub3': 'Sub3'})
-        
+
         # top 10
         top_10_df = result.nlargest(10, last_month_col, keep='all').copy()
         top_10_df = top_10_df.rename(columns={'id': 'ID'})
         top_10_df['ID'] = top_10_df['ID'].astype(str)
         top_10_df = pd.merge(top_10_df, product_info, on='ID', how='left')
         top_10_list = top_10_df.to_dict('records')  # DataFrame을 리스트로 변환
-        
+
         # bottom 10
         non_zero_values = result[result[last_month_col] != 0]
         bottom_10_df = non_zero_values.nsmallest(10, last_month_col).copy()
@@ -337,7 +333,7 @@ def prepare_chat_data():
         '매출액': ['sum', 'mean', 'count']
     }).reset_index()
     category_details.columns = ['대분류', '총매출', '평균매출', '판매건수']
-    
+
     category_text = "카테고리별 매출 상세:\n" + "\n".join([
         f"{row['대분류']}: 총매출 {row['총매출']:,}원, 평균 {row['평균매출']:,.0f}원, {row['판매건수']}건" 
         for _, row in category_details.iterrows()
@@ -350,11 +346,11 @@ def prepare_chat_data():
         on='id',
         how='left'
     )
-    
+
     # product_info 테이블에서 카테고리 정보 가져오기
     product_info_response = supabase.from_('product_info').select("id,main,sub3").execute()
     product_info_df = pd.DataFrame(product_info_response.data)
-    
+
     # 데이터 병합
     inventory_status = pd.merge(
         inventory_status,
@@ -363,10 +359,10 @@ def prepare_chat_data():
         right_on='id',
         how='left'
     )
-    
+
     inventory_status['일판매수량'] = inventory_status['일판매수량'].fillna(0)
     inventory_status['남은재고'] = inventory_status['재고수량'] - inventory_status['일판매수량']
-    
+
     inventory_text = "카테고리별 재고 현황:\n" + "\n".join([
         f"{row['main'] if pd.notna(row['main']) else '미분류'}({row['sub3'] if pd.notna(row['sub3']) else '미분류'}): "
         f"총재고 {row['재고수량']}개, 일판매량 {row['일판매수량']}개, 남은재고 {row['남은재고']}개" 
@@ -391,11 +387,11 @@ async def chat_with_solar(message: dict):
         response = supabase.table('product_info').select("id, sub3").execute()
         product_info = pd.DataFrame(response.data)
         product_info = product_info.rename(columns={'id': 'id', 'sub3': 'Sub3'})
-        
+
         # low_stock_df와 product_info 병합
         merged_low_stock = pd.merge(low_stock_df, product_info, on='id', how='left')
         total_low_stock = len(merged_low_stock)
-        
+
         if total_low_stock > 0:
             low_stock_list = "\n".join([
                 f"- {row['Sub3'] if pd.notna(row['Sub3']) else '미분류'}: {row['남은 재고']}개" 
@@ -406,16 +402,13 @@ async def chat_with_solar(message: dict):
 
         system_message = f"""
         당신은 판매 데이터 분석 AI 어시스턴트입니다. 
-
         1. 매출이나 재고 관련 질문이 모호한 경우:
         - "어떤 기간의 매출에 대해 알고 싶으신가요? 일간, 주간, 월간 등 구체적으로 말씀해 주시면 자세히 알려드리겠습니다."
         - "어떤 제품의 재고를 확인하고 싶으신가요? 특정 카테고리나 제품을 말씀해 주시면 정확한 정보를 알려드리겠습니다."
-
         2. 매출이나 재고와 관련 없는 질문인 경우:
         - "죄송합니다. 저는 매출과 재고 관련 문의만 답변 가능한 AI 어시스턴트입니다."
         
         3. 매출이나 재고에 대한 구체적인 질문인 경우에만 아래 데이터를 참고하여 답변하세요:
-
         === 매출 현황 ===
         - 연간 매출: {int(annual_sales):,}원
         - 일평균 매출: {float(daily_avg):,.0f}원
@@ -425,16 +418,13 @@ async def chat_with_solar(message: dict):
         - 최근 주간 매출: {int(last_weekly):,}원
         - 최근 월간 매출: {int(last_monthly):,}원
         - 전월 대비 변화율: {float(monthly_change):.1f}%
-
         === 카테고리 분석 ===
         - 매출 상승률: {float(rise_rate):.1f}%
         - 주요 성장 카테고리(소분류): {', '.join(subcat_list[:5])}
-
         === 재고 현황 ===
         - 재고 부족 상품 수: {total_low_stock}개
         - 재고 부족 상품 목록:
         {low_stock_list}
-
         답변 시 주의사항:
         1. 매출/재고 관련 구체적인 질문에만 관련 데이터를 활용하여 답변
         2. 매출/재고 관련 모호한 질문에는 더 구체적인 질문을 요청
@@ -454,23 +444,23 @@ async def chat_with_solar(message: dict):
             stream=False,
             response_format={"type": "text/html"}  # HTML 형식 응답 요청
         )
-        
+
         if hasattr(response, 'error'):
             return {
                 "response": f"API 오류: {response.error}",
                 "status": "error",
                 "error": str(response.error)
             }
-            
+
         return {
             "response": response.choices[0].message.content,
             "status": "success"
         }
-            
+
     except Exception as e:
-        print(f"Error details: {str(e)}")
+        print(f"Error details: {e!s}")
         return {
-            "response": f"서버 오류가 발생했습니다: {str(e)}",
+            "response": f"서버 오류가 발생했습니다: {e!s}",
             "status": "error",
             "error": str(e)
         }
@@ -488,7 +478,7 @@ async def chat_with_trend(message: dict):
                 },
                 timeout=30.0
             )
-            
+
             print(f"n8n response status: {response.status_code}")  
             if response.status_code == 200:
                 result = response.json()
@@ -511,15 +501,15 @@ async def chat_with_trend(message: dict):
                     "response": f"트렌드 분석 처리 중 오류가 발생했습니다. (Status: {response.status_code})",
                     "status": "error"
                 }
-                
+
     except Exception as e:
-        print(f"Error in trend-chat: {str(e)}")
+        print(f"Error in trend-chat: {e!s}")
         return {
             "status": "error", 
-            "error": f"서버 오류가 발생했습니다: {str(e)}"
+            "error": f"서버 오류가 발생했습니다: {e!s}"
         }
 
 # main
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run(app, host="127.0.0.1", port=8000, reload=False)
