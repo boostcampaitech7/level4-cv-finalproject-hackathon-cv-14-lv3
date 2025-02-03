@@ -1,4 +1,3 @@
-# backend/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
@@ -11,6 +10,7 @@ import os
 import requests
 import json
 from openai import OpenAI
+from supabase import create_client 
 
 # 1) FastAPI 앱 생성
 app = FastAPI()
@@ -24,13 +24,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 2) DB 연결 (SQLite)
-db_path = "/data/ephemeral/home/cw/level4-cv-finalproject-hackathon-cv-14-lv3/database/database.db"
-engine = sqlalchemy.create_engine(f"sqlite:///{db_path}")
-
 # 환경 변수 로드
 load_dotenv()
 UPSTAGE_API_KEY = os.getenv('UPSTAGE_API_KEY')
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+
+# Supabase 클라이언트 초기화
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # OpenAI 클라이언트 초기화
 client = OpenAI(
@@ -39,38 +40,55 @@ client = OpenAI(
 )
 
 # ===== 데이터 로딩 =====
-query_sales = """
-SELECT
-    d.ID,
-    p.Sub1 AS 대분류,
-    p.Sub3 AS 소분류,
-    d.date,
-    d.value AS 매출액
-FROM daily_sales_data d
-JOIN product_info p ON d.ID = p.ID
-"""
-df_sales = pd.read_sql(query_sales, con=engine)
+def load_sales_data():
+    response = supabase.from_('daily_sales_data').select("""
+        id,
+        date,
+        value,
+        product_info (
+            sub1,
+            sub3
+        )
+    """).execute()
+    df = pd.DataFrame(response.data)
+    
+    # 중첩된 product_info 데이터를 풀어서 새로운 컬럼으로 만듦
+    df['대분류'] = df['product_info'].apply(lambda x: x['sub1'] if x else None)
+    df['소분류'] = df['product_info'].apply(lambda x: x['sub3'] if x else None)
+    
+    # product_info 컬럼 제거
+    df = df.drop('product_info', axis=1)
+    
+    return df
 
-query_quantity = """
-SELECT
-    d.ID,
-    d.date,
-    d.value AS 판매수량
-FROM daily_data d
-"""
-df_quantity = pd.read_sql(query_quantity, con=engine)
+def load_quantity_data():
+    response = supabase.table('daily_data').select(
+        "id",
+        "date",
+        "value"
+    ).execute()
+    return pd.DataFrame(response.data)
 
-inventory_sql = """
-SELECT
-    p.ID,
-    p.Main,
-    p.Sub3,
-    inv.value AS 재고수량
-FROM product_inventory inv
-JOIN product_info p ON inv.ID = p.ID
-"""
-inventory_df = pd.read_sql(inventory_sql, con=engine)
-inventory_df = inventory_df.rename(columns={'id': 'ID'})
+def load_inventory_data():
+    response = supabase.from_('product_inventory').select("""
+        id,
+        value,
+        product_info (
+            main,
+            sub3
+        )
+    """).execute()
+    return pd.DataFrame(response.data)
+
+# 데이터 로드
+df_sales = load_sales_data()
+df_quantity = load_quantity_data()
+inventory_df = load_inventory_data()
+
+# 컬럼명 변경
+df_sales = df_sales.rename(columns={'value': '매출액'})
+df_quantity = df_quantity.rename(columns={'value': '판매수량'})
+inventory_df = inventory_df.rename(columns={'value': '재고수량'})
 
 # 문자열 변환
 df_sales['date'] = df_sales['date'].astype(str)
@@ -127,12 +145,13 @@ data_quantity['날짜'] = pd.to_datetime(data_quantity['date'])
 last_date = data_quantity['날짜'].max()
 
 if last_date:
-    daily_sales_quantity_last = data_quantity[data_quantity['날짜'] == last_date][['ID', '판매수량']]
+    daily_sales_quantity_last = data_quantity[data_quantity['날짜'] == last_date][['id', '판매수량']]
     daily_sales_quantity_last = daily_sales_quantity_last.rename(columns={'판매수량': '일판매수량'})
 else:
-    daily_sales_quantity_last = pd.DataFrame(columns=['ID', '일판매수량'])
+    daily_sales_quantity_last = pd.DataFrame(columns=['id', '일판매수량'])
 
-merged_df = pd.merge(inventory_df, daily_sales_quantity_last, on='ID', how='left')
+merged_df = pd.merge(inventory_df, daily_sales_quantity_last, on='id', how='left')  
+
 merged_df['일판매수량'] = merged_df['일판매수량'].fillna(0)
 merged_df['남은 재고'] = merged_df['재고수량'] - merged_df['일판매수량']
 low_stock_df = merged_df[(merged_df['남은 재고'] >= 0) & (merged_df['남은 재고'] <= 30)]
@@ -167,11 +186,11 @@ subcat_list = pivot_subcat.sum(axis=1).sort_values(ascending=False).head(10).ind
 # pivot
 monthly_data = (
     data.assign(월=lambda df: df['날짜'].dt.to_period('M').astype(str))
-    .groupby(['ID', '월'], as_index=False)['매출액'].sum()
+    .groupby(['id', '월'], as_index=False)['매출액'].sum()
 )
 
-result = monthly_data.pivot(index='ID', columns='월', values='매출액').reset_index()
-result['ID'] = result['ID'].astype(str)
+result = monthly_data.pivot(index='id', columns='월', values='매출액').reset_index()
+result['id'] = result['id'].astype(str)
 
 if len(result.columns) > 1:
     last_month_col = result.columns[-1]
@@ -188,6 +207,12 @@ blues = [
 ]
 
 # ===== 엔드포인트들 =====
+
+@app.get("/")
+def read_root():
+    return {
+        "status": "success",
+    }
 
 @app.get("/api/kpis")
 def get_kpis():
@@ -227,14 +252,22 @@ def get_category_pie():
 
 @app.get("/api/lowstock")
 def get_low_stock():
-    # product_info 테이블에서 sub3 정보 가져오기
-    product_info = pd.read_sql("SELECT id, sub3 FROM product_info", engine)
-    product_info = product_info.rename(columns={'id': 'ID', 'sub3': 'Sub3'})
+    # merged_df와 low_stock_df가 전역 변수로 정의되어 있는지 확인
+    global merged_df, low_stock_df
     
-    # low_stock_df와 product_info 병합
-    merged_low_stock = pd.merge(low_stock_df, product_info, on='ID', how='left')
-    
-    return merged_low_stock.to_dict(orient="records")
+    try:
+        # product_info 테이블에서 sub3 정보 가져오기
+        response = supabase.table('product_info').select("id", "sub3").execute()
+        product_info = pd.DataFrame(response.data)
+        product_info = product_info.rename(columns={'id': 'id', 'sub3': 'Sub3'})
+        
+        # low_stock_df와 product_info 병합
+        merged_low_stock = pd.merge(low_stock_df, product_info, on='id', how='left')
+        
+        return merged_low_stock.to_dict(orient="records")
+    except Exception as e:
+        print(f"Error in get_low_stock: {str(e)}")
+        return {"error": str(e)}
 
 @app.get("/api/rising-subcategories")
 def get_rising_subcategories():
@@ -243,32 +276,32 @@ def get_rising_subcategories():
         "subcat_list": list(subcat_list)  # 넘파이 Index -> list
     }
 
-
 # (추가) 상·하위 10개 품목
 @app.get("/api/topbottom")
 def get_topbottom():
     if last_month_col:
-        # id와 sub3 정보 가져오기 (소문자로 수정)
-        product_info = pd.read_sql("SELECT id, sub3 FROM product_info", engine)
-        product_info = product_info.rename(columns={'id': 'ID', 'sub3': 'Sub3'})  # 컬럼명 대문자로 변경
+        # Supabase에서 product_info 데이터 가져오기
+        response = supabase.table('product_info').select("id", "sub3").execute()
+        product_info = pd.DataFrame(response.data)
+        
+        # ID 컬럼을 문자열로 변환
+        product_info['id'] = product_info['id'].astype(str)
+        product_info = product_info.rename(columns={'id': 'ID', 'sub3': 'Sub3'})
         
         # top 10
         top_10_df = result.nlargest(10, last_month_col, keep='all').copy()
+        top_10_df = top_10_df.rename(columns={'id': 'ID'})
+        top_10_df['ID'] = top_10_df['ID'].astype(str)
         top_10_df = pd.merge(top_10_df, product_info, on='ID', how='left')
-        top_10_df["color"] = [reds] * len(top_10_df)
-
+        top_10_list = top_10_df.to_dict('records')  # DataFrame을 리스트로 변환
+        
         # bottom 10
         non_zero_values = result[result[last_month_col] != 0]
         bottom_10_df = non_zero_values.nsmallest(10, last_month_col).copy()
+        bottom_10_df = bottom_10_df.rename(columns={'id': 'ID'})
+        bottom_10_df['ID'] = bottom_10_df['ID'].astype(str)
         bottom_10_df = pd.merge(bottom_10_df, product_info, on='ID', how='left')
-        bottom_10_df["color"] = [blues] * len(bottom_10_df)
-
-        # display_name을 Sub3로만 설정 (ID는 사용하지 않음)
-        top_10_df['display_name'] = top_10_df['Sub3']
-        bottom_10_df['display_name'] = bottom_10_df['Sub3']
-
-        top_10_list = top_10_df.to_dict(orient='records')
-        bottom_10_list = bottom_10_df.to_dict(orient='records')
+        bottom_10_list = bottom_10_df.to_dict('records')  # DataFrame을 리스트로 변환
     else:
         top_10_list = []
         bottom_10_list = []
@@ -311,21 +344,32 @@ def prepare_chat_data():
     ])
 
     # 재고 현황 상세
-    inventory_status = pd.read_sql("""
-        SELECT 
-            p.Sub1 AS 대분류,
-            p.Sub3 AS 소분류,
-            SUM(inv.value) as 재고수량,
-            COALESCE(SUM(d.value), 0) as 일판매수량,
-            SUM(inv.value) - COALESCE(SUM(d.value), 0) as 남은재고
-        FROM product_inventory inv
-        JOIN product_info p ON inv.ID = p.ID
-        LEFT JOIN daily_data d ON inv.ID = d.ID
-        GROUP BY p.Sub1, p.Sub3
-    """, con=engine)
+    inventory_status = pd.merge(
+        inventory_df,
+        daily_sales_quantity_last,
+        on='id',
+        how='left'
+    )
+    
+    # product_info 테이블에서 카테고리 정보 가져오기
+    product_info_response = supabase.from_('product_info').select("id,main,sub3").execute()
+    product_info_df = pd.DataFrame(product_info_response.data)
+    
+    # 데이터 병합
+    inventory_status = pd.merge(
+        inventory_status,
+        product_info_df,
+        left_on='id',
+        right_on='id',
+        how='left'
+    )
+    
+    inventory_status['일판매수량'] = inventory_status['일판매수량'].fillna(0)
+    inventory_status['남은재고'] = inventory_status['재고수량'] - inventory_status['일판매수량']
     
     inventory_text = "카테고리별 재고 현황:\n" + "\n".join([
-        f"{row['대분류'] if pd.notna(row['대분류']) else '미분류'}({row['소분류'] if pd.notna(row['소분류']) else '미분류'}): 총재고 {row['재고수량']}개, 일판매량 {row['일판매수량']}개, 남은재고 {row['남은재고']}개" 
+        f"{row['main'] if pd.notna(row['main']) else '미분류'}({row['sub3'] if pd.notna(row['sub3']) else '미분류'}): "
+        f"총재고 {row['재고수량']}개, 일판매량 {row['일판매수량']}개, 남은재고 {row['남은재고']}개" 
         for _, row in inventory_status.iterrows()
     ])
 
@@ -344,11 +388,12 @@ CHAT_DATA = prepare_chat_data()
 async def chat_with_solar(message: dict):
     try:
         # product_info 테이블에서 sub3 정보 가져오기
-        product_info = pd.read_sql("SELECT id, sub3 FROM product_info", engine)
-        product_info = product_info.rename(columns={'id': 'ID', 'sub3': 'Sub3'})
+        response = supabase.table('product_info').select("id, sub3").execute()
+        product_info = pd.DataFrame(response.data)
+        product_info = product_info.rename(columns={'id': 'id', 'sub3': 'Sub3'})
         
         # low_stock_df와 product_info 병합
-        merged_low_stock = pd.merge(low_stock_df, product_info, on='ID', how='left')
+        merged_low_stock = pd.merge(low_stock_df, product_info, on='id', how='left')
         total_low_stock = len(merged_low_stock)
         
         if total_low_stock > 0:
