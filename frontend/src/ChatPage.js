@@ -97,7 +97,7 @@ const ChatPage = () => {
           </div>
         )}
         <div style={chat.sender === 'user' ? styles.userMessage : styles.botMessage}>
-          {/* 메시지 내용 줄바꿈 처리 */}
+          {/* 메시지 줄바꿈 처리 */}
           {chat.content.split("\n").map((line, i) => (
             <React.Fragment key={i}>
               {line}
