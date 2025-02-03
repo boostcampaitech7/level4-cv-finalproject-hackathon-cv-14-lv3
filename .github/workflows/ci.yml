@@ -50,3 +50,10 @@ jobs:
       run: |
         poetry run ruff check .
         poetry run ruff format .
+
+    - name: Run tests
+      run: |
+        poetry run pytest tests/
+        poetry run pytest --cov=topicgen
+        poetry run ruff check .
+        poetry run ruff format .

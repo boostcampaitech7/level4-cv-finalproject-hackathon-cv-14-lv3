@@ -1,11 +1,13 @@
 # Environment
 env
 .env
+*lib
 
 # Cache files
 *.pyc
 *.exe
 *.log
+*.bin
 .pytest_cache
 __pycache__/
 
@@ -20,10 +22,3 @@ __pycache__/
 *.csv
 node_modules/
 credentials.json
-
-# venv
-/.venv
-
-# data
-open/
-*.db

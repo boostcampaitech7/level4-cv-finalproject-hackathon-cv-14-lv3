@@ -1,6 +1,19 @@
 # PoetgreSQL Guide
 
+<<<<<<< HEAD
 이 문서는 PostgreSQL를 생성하고, n8n에 연결하는 방법을 소개합니다. PostgreSQL는 기존의 SQLite와 다르게 환경 설정을 요구하며,`linux(ubuntu)`를 기준으로 `/var/lib/postgresql/{version}/main` 경로에 DB를 저장합니다.
+=======
+이 문서는 PostgreSQL를 생성하고, n8n에 연결하는 방법을 소개합니다. PostgreSQL는 기존의 SQLite와 다르게 환경 설정을 요구하며,`linux(ubuntu)`를 기준으로 `/var/lib/postgresql/{version}/main` 경로에 DB를 저장합니다. 또한 s Server-client 구조로 작동합니다.
+
+
+## Database Schema
+
+![Image](https://github.com/user-attachments/assets/01e4b216-90d6-4847-ab6b-20c571134162)
+
+- `product_info`: ID, Amazon taxonomy(Main-Sub-Sub1-Sub2-Sub3)으로 구성되어 있습니다.
+- `time_series_data`: ID, 시계열 데이터로 구성되어 있습니다.
+
+>>>>>>> origin/main
 
 ## 🧐 How to Use??
 ### Step 1. Environment Setup : PostgreSQL을 활용하기 위해서는 초기 환경 설정이 필요합니다.
@@ -9,7 +22,11 @@
 su - postgres
 psql
 
+<<<<<<< HEAD
 # Step 2. Setup DB in PostgreSQL
+=======
+# Step 2. Setup DB for PostgreSQL
+>>>>>>> origin/main
 CREATE DATABASE sales_data;
 CREATE USER gorani WITH PASSWORD "password"; # 여러분이 원하는 비밀번호를 입력해주세요
 GRANT ALL PRIVILEGES ON DATABASE sales_data TO gorani;
@@ -22,9 +39,25 @@ exit
 ```
 
 
+<<<<<<< HEAD
 ### Step 2. CSV -> PostgreSQL : 데이터 변환 및 저장
 ```bash
 poetry run python csv_to_db.py <password>
+=======
+### Step 2. CSV -> SQLite(DB) -> PostgreSQL : 전처리를 수행한 뒤에,CSV 파일을 DB로 변환하는 과정입니다.
+```bash
+# Pre-processing for amazon_categories.csv
+poetry run python mapping.py
+
+# CSV merge : train.csv & amazon_categories.csv
+poetry run python csv_merge.py
+
+# CSV -> DB : 위의 과정을 통해서 생성된, 전처리된 train.csv를 SQLite(.db)로 변환합니다.
+poetry run python csv_to_db.py
+
+# Db -> PostgreSQL : SQLite(.db)를 PostgreSQL로 변환합니다.
+poetry run python db_to_postgre.py <Password>
+>>>>>>> origin/main
 ```
 
 
@@ -37,12 +70,18 @@ sudo systemctl status postgresql # Check if PostgreSQL is running
 sudo nano /etc/postgresql/16/main/postgresql.conf
 listen_addresses = '*' # 이 내용을 파일에 추가해주세요
 ```
+<<<<<<< HEAD
 ![PostgreSQL result](https://github.com/boostcampaitech7/level4-cv-finalproject-hackathon-cv-14-lv3/tree/main/src/postgre_result.png)
 
+=======
+
+![Image](https://github.com/user-attachments/assets/d1bfc714-e8c2-40cc-b958-9c3b6ee905a1)
+>>>>>>> origin/main
 
 ### Step 4. n8n에 PostgreSQL 연결하기
 n8n에서 PostgreSQL을 활용하기 위해서는 `PostgreSQL node`를 활용합니다. 아래의 이미지를 참고하여 설정해주세요.
 
+<<<<<<< HEAD
 ![n8n_postgre](https://github.com/boostcampaitech7/level4-cv-finalproject-hackathon-cv-14-lv3/tree/main/src/n8n_postgre.png)
 
 
@@ -52,3 +91,6 @@ n8n에서 PostgreSQL을 활용하기 위해서는 `PostgreSQL node`를 활용합
 
 - `product_info`: 제품 기본 정보 (ID, 제품명, 카테고리 등)
 - `time_series_data`: 시계열 데이터
+=======
+![Image](https://github.com/user-attachments/assets/9a665b5f-150c-47d4-9a81-5dce3cd5a052)
+>>>>>>> origin/main
