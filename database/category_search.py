@@ -84,6 +84,12 @@ class HierarchicalCategorySearch:
         """LLM을 사용하여 주어진 후보들 중에서 가장 적합한 카테고리를 찾음"""
         if not candidates:
             return None
+
+        # Truncate long inputs - batch size
+        query = query[:1000]
+        candidates = candidates[:50]
+        if context:
+            context = context[:500]
         prompt = f"""You are a product categorization expert for an e-commerce platform.
         Your task is to classify the given product into the most appropriate category.
 
@@ -104,7 +110,7 @@ Return ONLY the exact category name from the available options. No explanation o
 """
 
         messages = [{"role": "user", "content": prompt}]
-        response = self.client.chat.completions.create(model="solar-pro", messages=messages)
+        response = self.client.chat.completions.create(model="solar-pro", max_tokens=200, messages=messages)
         selected = response.choices[0].message.content.strip()
 
         # 반환된 카테고리가 후보 목록에 없는 경우 첫 번째 후보 반환
