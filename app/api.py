@@ -7,6 +7,10 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+import subprocess
+from typing import List
+import asyncio
+
 # Configure imports and environment
 EMBEDDINGS_DIR = Path(__file__).parent.parent / "database"
 sys.path.append(str(EMBEDDINGS_DIR))
@@ -38,6 +42,9 @@ class ProductInput(BaseModel):
 
 class BatchProductInput(BaseModel):
     products: list[ProductInput]
+
+class ItemListInput(BaseModel):
+    item_list: str
 
 
 async def send_to_n8n(data: dict):
@@ -95,6 +102,47 @@ async def process_batch(batch: BatchProductInput):
     except Exception as err:
         raise HTTPException(status_code=500, detail=str(err)) from err
 
+async def run_process(command: List[str]):
+    """webshop agent 프로세스 실행"""
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    # Process 종료 대기
+    stdout, stderr = await asyncio.to_thread(process.communicate)
+
+    # 반환 값 처리
+    if process.returncode == 0:
+        return {"status": "success", "message": "Process completed successfully", "output": stdout.decode()}
+    else:
+        return {"status": "error", "message": "Process failed", "error": stderr.decode()}
+
+@app.post("/purchase")
+async def purchase_item(params: ItemListInput):
+    """
+    물품 리스트를 구매하고 결과를 n8n으로 전송하는 엔드포인트
+
+    Request body:
+    {
+        "item_list": "Ruffles Ridged Potato Chips,Castor Oil Hair Shampoo,..."
+    }
+    """
+    if not params.item_list:
+        raise HTTPException(status_code=400, detail="item_list cannot be empty")
+    try:
+        command = [
+            "python", "webshop_agent/run.py",
+            "--num_trials", "1",
+            "--num_envs", "1",
+            "--run_name", "webshop_agent/http_run_logs_0",
+            "--item_list", params.item_list,
+            "--run_http",
+        ]
+
+        # 비동기적으로 프로세스 실행
+        result = await run_process(command)
+        return result
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return {"status": "error", "message": str(e)}
 
 def main():
     import socket
