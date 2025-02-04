@@ -1,6 +1,5 @@
 import os
 import sys
-from datetime import datetime
 from pathlib import Path
 
 import httpx
@@ -68,35 +67,37 @@ async def process_batch(batch: BatchProductInput):
     """
     배치 단위로 상품을 처리하고 결과를 n8n으로 전송하는 엔드포인트
 
-    Request body:
+    Request body example:
     {
-        "products": [
-            {"input_text": "gaming laptop"},
-            {"input_text": "organic banana"},
-            ...
-        ]
-    }
+    "results": [
+        {
+        "input_text": "Cheese burger",
+        "categories": {
+            "main": "Grocery & Gourmet Food",
+            "sub1": "Fresh Produce",
+            "sub2": "Baking",
+            "sub3": "Bread Baking"
+        }}]}
     """
     try:
         results = []
-        processed_time = datetime.now().isoformat()
 
         for product in batch.products:
             # 카테고리 분류 실행
             categories = searcher.find_best_category(product.input_text)
 
-            # 결과 데이터 구성
-            result = {"input_text": product.input_text, "categories": categories, "processed_at": processed_time}
+            # 필요한 데이터만 포함
+            result = {"input_text": product.input_text, "categories": categories}
             results.append(result)
 
         # Prepare data for n8n
-        n8n_data = {"batch_id": processed_time, "processed_count": len(results), "results": results}
+        n8n_data = {"results": results}
 
         # Attempt to send to n8n webhook (non-blocking)
         await send_to_n8n(n8n_data)
 
         # Return response
-        return {"status": "success", "processed_count": len(results), "processed_at": processed_time, "results": results}
+        return {"status": "success", "results": results}
 
     except Exception as err:
         raise HTTPException(status_code=500, detail=str(err)) from err
@@ -144,30 +145,20 @@ async def purchase_item(params: ItemListInput):
         return {"status": "error", "message": str(e)}
 
 def main():
-    import time
+    import socket
 
-    import psutil
     import uvicorn
 
-    def kill_process_on_port(port):
-        """주어진 포트를 사용하는 프로세스를 찾아서 종료"""
-        for proc in psutil.process_iter(["pid", "name"]):
-            try:
-                for conn in proc.connections():
-                    if conn.laddr.port == port:
-                        psutil.Process(proc.pid).terminate()
-                        time.sleep(1)
-                        return True
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                pass
-        return False
+    def is_port_in_use(port):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            return s.connect_ex(("0.0.0.0", port)) == 0  # S104
 
-    # 8000번 포트 사용 중인 프로세스 종료
-    if kill_process_on_port(8000):
-        print("Killed existing process on port 8000")
+    port = 8000
+    while is_port_in_use(port) and port < 8020:
+        port += 1
 
-    # FastAPI 서버 시작 (localhost만 허용)
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    print(f"Starting server on port {port}")
+    uvicorn.run(app, host="0.0.0.0", port=port)  # S104
 
 
 if __name__ == "__main__":

@@ -27,9 +27,7 @@ class EmbeddingAnalyzer:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        cursor.execute(
-            "SELECT main, sub1, sub2, sub3, embedding FROM category_hierarchy"
-        )
+        cursor.execute("SELECT main, sub1, sub2, sub3, embedding FROM category_hierarchy")
         results = cursor.fetchall()
 
         data = []
