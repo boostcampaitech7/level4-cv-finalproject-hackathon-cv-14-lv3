@@ -566,6 +566,37 @@ async def chat_with_trend(message: dict):
             "status": "error",
             "error": f"서버 오류가 발생했습니다: {str(e)}"
         }
+@app.get("/api/inventory")
+def get_inventory(sort: str = "asc"):
+    try:
+        response = supabase.from_('product_inventory').select("""
+            id, value,
+            product_info (
+                main, sub1, sub2, sub3
+            )
+        """).execute()
+
+        df_inventory = pd.DataFrame(response.data)
+
+        df_inventory['main'] = df_inventory['product_info'].apply(lambda x: x.get('main', None) if isinstance(x, dict) else None)
+        df_inventory['sub1'] = df_inventory['product_info'].apply(lambda x: x.get('sub1', None) if isinstance(x, dict) else None)
+        df_inventory['sub2'] = df_inventory['product_info'].apply(lambda x: x.get('sub2', None) if isinstance(x, dict) else None)
+        df_inventory['sub3'] = df_inventory['product_info'].apply(lambda x: x.get('sub3', None) if isinstance(x, dict) else None)
+
+        # 불필요한 컬럼 제거
+        df_inventory = df_inventory.drop(columns=['product_info', 'id'])
+
+        # 재고 수량(value) 기준 정렬 (기본: 오름차순)
+        if sort == "desc":
+            df_inventory = df_inventory.sort_values(by=['value'], ascending=False)
+        else:
+            df_inventory = df_inventory.sort_values(by=['value'], ascending=True)
+
+        return df_inventory.to_dict(orient="records")
+
+    except Exception as e:
+        print(f"Error fetching inventory: {e!s}")
+        return {"error": str(e)}
 
 # main
 if __name__ == "__main__":
