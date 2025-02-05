@@ -28,13 +28,22 @@ def extract_category(line):
 def extract_date_range(line):
     """날짜 범위 추출"""
     if '클릭량 추이' in line and '2025.' in line and '~' in line:
-        dates = line.split('~')
-        start = dates[0].split('2025.')[1].strip().strip('.')
-        start_date = f"2025-{start.replace('.', '-')}"
-        end = dates[1].split('2025.')[1].split('↓')[0].strip().strip('.')
-        end_date = f"2025-{end.replace('.', '-')}"
-        print(f"날짜 범위: {start_date} ~ {end_date}")
-        return start_date, end_date
+        try:
+            # 날짜 부분만 추출
+            dates = line.split('~')
+            start = dates[0].split('2025.')[1].strip().strip('.')
+            start_date = f"2025-{start.replace('.', '-')}"
+            
+            # 끝 날짜 추출 시 불필요한 텍스트 제거
+            end_part = dates[1].split('2025.')[1]
+            end = end_part.split()[0].strip().strip('.') 
+            end_date = f"2025-{end.replace('.', '-')}"
+            
+            print(f"날짜 범위: {start_date} ~ {end_date}")
+            return start_date, end_date
+        except Exception as e:
+            print(f"날짜 추출 중 에러: {str(e)}")
+            return None, None
     return None, None
 
 def extract_data(ocr_result):
@@ -70,15 +79,11 @@ def extract_data(ocr_result):
         for i in range(len(words)-1):
             if words[i].isdigit():
                 rank = int(words[i])
-                if 1 <= rank <= 10:
+                if 1 <= rank <= 5:
                     product_name = words[i+1].strip()
                     
-                    # 날짜 데이터나 잘못된 추출 필터링
-                    if (product_name == 'V' or 
-                        product_name.isdigit() or
-                        '월' in product_name or 
-                        '일' in product_name or
-                        product_name.endswith('일')):
+                    # 잘못된 추출정보 필터링
+                    if (product_name == 'V' or product_name.isdigit()):
                         continue
                     
                     # 순위별로 저장
@@ -110,7 +115,6 @@ def save_to_supabase(rankings):
             
             print(f"\n=== Database 저장 ===")
             
-            '''
             # 기존 데이터 삭제
             supabase.table('trend_product')\
                     .delete()\
@@ -118,7 +122,6 @@ def save_to_supabase(rankings):
                     .eq('start_date', start_date)\
                     .execute()
             print("기존 데이터 삭제 완료")
-            '''
             
             # 데이터 추가
             result = supabase.table('trend_product').insert(rankings).execute()
@@ -171,5 +174,5 @@ def process_directory(directory_path):
                 print("OCR 처리 실패")
 
 if __name__ == "__main__":
-    output_dir = "크롤링한 스크린샷 저장 dir 경로"
+    output_dir = "크롤링된 image dir 경로"
     process_directory(output_dir)
