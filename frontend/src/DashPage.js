@@ -727,36 +727,73 @@ function DashPage() {
     <div style={PAGE_STYLE}>
       <h1 style={TITLE_STYLE}>데이터 대시보드</h1>
 
-      {/* 예시로 연간 매출 하나 표시 (원본 코드 일부) */}
-      <div style={ROW_STYLE}>
-        <div style={{
-          display: "inline-block",
-          width: "20%",
-          margin: "5px",
-          padding: "8px",
-          textAlign: "center",
-          borderRadius: "10px",
-          backgroundColor: "#ffffff",
-          boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.1)"
-        }}>
-          <h3 style={{
-            backgroundColor: "#f4f4f4",
-            padding: "5px",
-            borderRadius: "10px 10px 0 0",
-            textAlign: "center",
-            color: "#333",
-            fontSize: "14px",
-            fontWeight: "bold"
-          }}>연간 매출</h3>
-          <h2 style={{
-            textAlign: "center",
-            fontSize: "18px",
-            color: "#333"
+      {/* KPI 카드 4개 가로 정렬 */}
+      <div style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        width: "80%", // 🔹 가로 크기 조정 (너무 길지 않게)
+        margin: "30px auto",
+        gap: "15px"  // 🔹 카드 사이 여백 조정
+      }}>
+        {[
+          { title: "연간 매출", value: kpis.annual_sales, diff: 0 }, // 연간 매출은 증감률 없음
+          { title: "일간 매출", value: dailyVals.current, diff: dailyDiffPct },
+          { title: "주간 매출", value: monthlyVals.current, diff: monthlyDiffPct },
+          { title: "월간 매출", value: weeklyVals.current, diff: weeklyDiffPct }
+        ].map(({ title, value, diff }, idx) => (
+          <div key={idx} style={{
+            backgroundColor: "#f8f9fa",  // 🔹 배경색 조정
+            borderRadius: "10px",
+            boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.1)",
+            padding: "15px 20px",
+            width: "23%",  // 🔹 크기 고정
+            minWidth: "180px",
+            textAlign: "left"
           }}>
-            {formatCurrency(kpis.annual_sales)}
-          </h2>
-        </div>
+            {/* 타이틀 */}
+            <h3 style={{
+              fontSize: "12px",      // 🔹 글자 크기 조정
+              fontWeight: "bold",
+              color: "#777",
+              marginBottom: "8px",
+              letterSpacing: "1px",  // 🔹 대문자 간격 추가
+              textTransform: "uppercase"
+            }}>
+              {title}
+            </h3>
+
+            {/* KPI 값 + 증감율을 한 줄에 배치 */}
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between"
+            }}>
+              {/* KPI 값 */}
+              <h2 style={{
+                fontSize: "24px",    // 🔹 숫자 크기 줄임
+                fontWeight: "bold",
+                color: "#222",
+              }}>
+                {formatCurrency(value)}
+              </h2>
+
+              {/* 증감률 표시 (연간 매출 제외) */}
+              {diff !== null && (
+                <p style={{
+                  fontSize: "12px", // 🔹 증감률 폰트 크기 조정
+                  fontWeight: "bold",
+                  color: diff >= 0 ? "#dc3545" : "#007bff",
+                  marginLeft: "10px" // 🔹 오른쪽 정렬을 위해 여백 추가
+                }}>
+                  {diff >= 0 ? `+${diff.toFixed(2)}% ↑` : `${diff.toFixed(2)}% ↓`}
+                </p>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
+
       {/* (급상승 품목 슬라이드) */}
       <div style={KPI_ALL_STYLE}>
         <h2 style={TITLE_STYLE}>
