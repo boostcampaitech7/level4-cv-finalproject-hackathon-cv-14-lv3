@@ -1,0 +1,184 @@
+{
+    "name": "Recall Agent",
+    "nodes": [
+      {
+        "parameters": {
+          "inputSource": "passthrough"
+        },
+        "id": "ae360ddd-8f9d-43cf-b2ec-eee5bd6cfc8d",
+        "typeVersion": 1.1,
+        "name": "Workflow Input Trigger",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "position": [
+          880,
+          120
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://r.jina.ai/https://www.safetykorea.kr/recall/recallBoard",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1100,
+          120
+        ],
+        "id": "19f1235d-c47c-46c8-a7d0-b55f2f7ea793",
+        "name": "[Jina AI] HTTP Request",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "MTrWCkauvTtKi52G",
+            "name": "Header Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "weeks"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          880,
+          320
+        ],
+        "id": "6a37636b-4eb0-4144-9277-94af1affb8a8",
+        "name": "Schedule Trigger"
+      },
+      {
+        "parameters": {
+          "language": "python",
+          "pythonCode": "def process_and_parse_recall_data(item):\n   \"\"\"리콜 데이터를 추출하고 파싱합니다.\"\"\"\n   try:\n       data = item.get(\"data\", \"\")\n       start_marker = \"번호\t사진\t제품명\t모델명\t사업자명\t리콜종류\t바코드번호\t공표일\"\n       end_marker = \"<< < 1 2 3 4 5 6 7 8 9 10 > >>\"\n       \n       start_idx = data.find(start_marker) + len(start_marker)\n       end_idx = data.find(end_marker)\n       \n       if start_idx == -1 or end_idx == -1:\n           return []\n           \n       table_data = data[start_idx:end_idx].strip()\n       result = []\n       \n       for line in table_data.split('\\n'):\n           if not line.strip():\n               continue\n               \n           fields = line.split('\\t')\n           if len(fields) < 8:\n               continue\n               \n           parsed_item = {\n               \"ID\": fields[0],\n               \"Product\": fields[2],\n               \"Model\": fields[3],\n               \"Name of company\": fields[4],\n               \"Recall type\": fields[5],\n               \"barcode\": fields[6] if fields[6] != '-' else \"\",\n               \"Announcement date\": fields[7]\n           }\n           result.append(parsed_item)\n           \n       return result\n       \n   except Exception as e:\n       return []\n\n# n8n용 메인 함수\nresult = []\nfor item in _input.all():\n   parsed_items = process_and_parse_recall_data(item.json)\n   result.extend(parsed_items)\nreturn result"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1320,
+          120
+        ],
+        "id": "31131b9e-ae17-47c9-a35f-2e4449a6d03d",
+        "name": "Extracter & Parser"
+      },
+      {
+        "parameters": {
+          "sendTo": "yynk2012@gmail.com",
+          "subject": "={{ $json.subject }}",
+          "emailType": "text",
+          "message": "={{ $json.body }}",
+          "options": {
+            "senderName": "GORANI"
+          }
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.1,
+        "position": [
+          1780,
+          120
+        ],
+        "id": "ee3b9a65-43ed-47af-ac20-47f5e72ccf9c",
+        "name": "Gmail",
+        "webhookId": "7c4f758c-d2b5-4a71-84d3-9536cd3baca5",
+        "alwaysOutputData": false,
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "ypfvdvcv7cVAbEm4",
+            "name": "Gmail account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "language": "python",
+          "pythonCode": "def combine_recalls():\n   body = \"안녕하세요,\\n\\n오늘의 리콜 정보를 알려드립니다.\\n\\n\"\n   all_recalls = []\n   latest_date = \"\"\n   \n   # 모든 입력 아이템을 처리\n   for item in _input.all():\n       if hasattr(item.json, 'keys'):  # 단일 딕셔너리인 경우\n           all_recalls.append(item.json)\n       else:  # 리스트인 경우\n           all_recalls.extend(item.json)\n\n   # 리콜 정보 결합\n   for recall in all_recalls:\n       body += f\"\"\"[리콜 제품 정보]\n- 제품명: {recall['Product']}\n- 모델명: {recall['Model']}\n- 제조/수입업체: {recall['Name of company']}\n- 리콜구분: {recall['Recall type']}\n- 공표일자: {recall['Announcement date']}\\n\\n\"\"\"\n       \n       if recall['Announcement date'] > latest_date:\n           latest_date = recall['Announcement date']\n\n   body += \"\\n자세한 내용은 제품안전정보센터(https://www.safetykorea.kr/)를 참고해 주세요.\"\n\n   return [{\n       \"subject\": f\"제품 리콜 정보 알림 ({latest_date} 기준)\",\n       \"body\": body\n   }]\n\nreturn combine_recalls()"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1540,
+          120
+        ],
+        "id": "084be13c-b589-46d4-94ed-cc79b3a85b32",
+        "name": "Formatter",
+        "alwaysOutputData": true
+      }
+    ],
+    "pinData": {},
+    "connections": {
+      "Workflow Input Trigger": {
+        "main": [
+          [
+            {
+              "node": "[Jina AI] HTTP Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "[Jina AI] HTTP Request": {
+        "main": [
+          [
+            {
+              "node": "Extracter & Parser",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Schedule Trigger": {
+        "main": [
+          [
+            {
+              "node": "[Jina AI] HTTP Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extracter & Parser": {
+        "main": [
+          [
+            {
+              "node": "Formatter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Formatter": {
+        "main": [
+          [
+            {
+              "node": "Gmail",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "versionId": "b9598726-1c0b-47cf-a727-cdd59928f35c",
+    "meta": {
+      "templateCredsSetupCompleted": true,
+      "instanceId": "d4adb49d182020a0902b2114e978ac8272f9ff5e02883761bccd2a608155440a"
+    },
+    "id": "Gzg7yAMPgjCwFQBX",
+    "tags": []
+  }

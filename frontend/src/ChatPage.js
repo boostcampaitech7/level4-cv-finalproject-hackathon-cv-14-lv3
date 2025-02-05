@@ -5,6 +5,7 @@ const ChatPage = () => {
   const [chatHistory, setChatHistory] = useState([]); // 대화 내역 저장
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [mode, setMode] = useState(null); // chat mode 저장
 
   const chatEndRef = useRef(null); // 스크롤을 제어하기 위한 Ref
 
@@ -14,26 +15,54 @@ const ChatPage = () => {
   };
 
   useEffect(() => {
-    scrollToBottom(); // chatHistory가 업데이트될 때마다 스크롤 이동
-  }, [chatHistory]);
+    setChatHistory([
+      {
+        sender: 'bot',
+        content: '안녕하세요, 매출&재고 관리 AI 어시스턴트입니다. 무엇을 도와드릴까요?',
+        showButtons: true // mode 선택 버튼
+      }
+    ]);
+  }, []);
+
+  // mode 선택 핸들러
+  const handleModeSelect = async (selectedMode) => {
+    setMode(selectedMode);
+    const userChoice = selectedMode === 'data' ? '데이터 기반 조회' : '트렌드 분석';
+
+    setChatHistory((prev) => [...prev, 
+      { sender: 'user', content: userChoice },
+      { sender: 'bot', content: selectedMode === 'data' ? 
+        '데이터 기반 조회를 선택하셨습니다. 어떤 정보를 조회하시겠습니까?' :
+        '트렌드 분석을 선택하셨습니다. 어떤 트렌드를 분석하시겠습니까?' 
+      }
+    ]);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!message.trim()) return;
 
     // 사용자의 메시지를 대화 내역에 추가
-    setChatHistory((prevHistory) => [...prevHistory, { sender: 'user', content: message }]);
+    setChatHistory((prev) => [...prev, { sender: 'user', content: message }]);
 
     setIsLoading(true);
     setError(null);
 
     try {
-      const res = await fetch('http://localhost:8000/api/chat', {
+      // mode에 따라 다른 엔드포인트 호출
+      const endpoint = mode === 'data' ? 
+        'http://localhost:8000/api/chat' : 
+        'http://localhost:8000/api/trend-chat';
+
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ content: message }),
+        body: JSON.stringify({
+          content: message,
+          mode: mode
+        }),
       });
 
       const data = await res.json();
@@ -56,35 +85,51 @@ const ChatPage = () => {
     }
   };
 
+  const renderMessage = (chat, index) => (
+    <>
+      <div
+        key={`message-${index}`}
+        style={chat.sender === 'user' ? styles.userMessageContainer : styles.botMessageContainer}
+      >
+        {chat.sender === 'bot' && (
+          <div style={styles.botProfile}>
+            <img src="/bot-profile.png" alt="Bot" style={styles.profileImage} />
+          </div>
+        )}
+        <div style={chat.sender === 'user' ? styles.userMessage : styles.botMessage}>
+          {chat.content}
+        </div>
+      </div>
+      {/* 버튼을 별도 컨테이너로 분리 */}
+      {chat.showButtons && (
+        <div key={`buttons-${index}`} style={styles.modeButtonContainer}>
+          <button 
+            onClick={() => handleModeSelect('data')}
+            style={styles.modeButton}
+          >
+            데이터 기반 조회
+          </button>
+          <button 
+            onClick={() => handleModeSelect('trend')}
+            style={styles.modeButton}
+          >
+            트렌드 분석
+          </button>
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div style={styles.page}>
       <h1 style={styles.title}>AI 챗봇 상담</h1>
       <div style={styles.container}>
         {/* 대화 내역 표시 */}
         <div style={styles.chatHistory}>
-          {chatHistory.map((chat, index) => (
-            <div
-              key={index}
-              style={chat.sender === 'user' ? styles.userMessageContainer : styles.botMessageContainer}
-            >
-              {chat.sender === 'bot' && (
-                <div style={styles.botProfile}>
-                  <img 
-                    src="/bot-profile.png"
-                    alt="Bot" 
-                    style={styles.profileImage}
-                  />
-                </div>
-              )}
-              <div style={chat.sender === 'user' ? styles.userMessage : styles.botMessage}>
-                {chat.content}
-              </div>
-            </div>
-          ))}
-          <div ref={chatEndRef} /> {/* 스크롤을 끝으로 이동시키기 위한 참조 */}
+        {chatHistory.map((chat, index) => renderMessage(chat, index))}
+          <div ref={chatEndRef} />
         </div>
 
-        {/* 입력 폼 */}
         <form onSubmit={handleSubmit} style={styles.form}>
           <input
             type="text"
@@ -92,14 +137,17 @@ const ChatPage = () => {
             onChange={(e) => setMessage(e.target.value)}
             placeholder="메시지를 입력하세요..."
             style={styles.input}
-            disabled={isLoading}
+            disabled={isLoading || !mode} // 모드 선택 전에는 입력 비활성화
           />
-          <button type="submit" disabled={isLoading || !message.trim()} style={styles.button}>
+          <button 
+            type="submit" 
+            disabled={isLoading || !message.trim() || !mode}
+            style={styles.button}
+          >
             {isLoading ? '전송 중...' : '전송'}
           </button>
         </form>
 
-        {/* 에러 표시 */}
         {error && (
           <div style={styles.error}>
             <p>{error}</p>
@@ -240,6 +288,26 @@ const styles = {
     backgroundColor: '#e9ecef',
     border: '2px solid white',
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+  },
+  modeButtonContainer: {
+    display: 'flex',
+    justifyContent: 'flex-end', // 오른쪽 정렬
+    gap: '10px',
+    padding: '10px 20px',
+    marginBottom: '15px',
+  },
+  modeButton: {
+    padding: '10px 20px',
+    backgroundColor: '#4a90e2',
+    color: 'white',
+    border: 'none',
+    borderRadius: '20px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    transition: 'all 0.3s ease',
+    '&:hover': {
+      backgroundColor: '#357abd',
+    },
   },
 };
 
