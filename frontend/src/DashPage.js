@@ -123,26 +123,27 @@ const WATCHLIST_ITEM_STYLE = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  padding: "8px 0",
+  padding: "15px 0",
   borderBottom: "1px solid #f0f0f0",
-  fontSize: "15px"
+  fontSize: "16px"
 };
 const WATCHLIST_ITEM_LEFT_STYLE = {
   display: "flex",
   alignItems: "center"
 };
 const WATCHLIST_LOGO_STYLE = {
-  width: "32px",
-  height: "32px",
+  width: "40px",
+  height: "40px",
   borderRadius: "50%",
-  marginRight: "8px",
+  marginRight: "12px",
   objectFit: "cover"
 };
 const WATCHLIST_ITEM_NAME_STYLE = {
-  fontWeight: "bold"
+  fontWeight: "bold",
+  fontSize: "16px"
 };
 const WATCHLIST_ITEM_SUBNAME_STYLE = {
-  fontSize: "13px",
+  fontSize: "14px",
   color: "#999"
 };
 const WATCHLIST_ITEM_RIGHT_STYLE = {
@@ -281,6 +282,7 @@ function WatchListItem({ item }) {
 ////////////////////////////////////////
 // 4) AnimatedGraph
 ////////////////////////////////////////
+
 const AnimatedGraph = ({ trace, title }) => {
   const graphRef = useRef(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -299,7 +301,6 @@ const AnimatedGraph = ({ trace, title }) => {
     if (graphRef.current) {
       observer.observe(graphRef.current);
     }
-
     return () => observer.disconnect();
   }, []);
 
@@ -320,7 +321,6 @@ const AnimatedGraph = ({ trace, title }) => {
       const animation = setInterval(() => {
         step++;
         const progress = step / steps;
-
         const newData = {
           ...trace,
           x: trace.x.map((targetValue, i) => {
@@ -328,15 +328,12 @@ const AnimatedGraph = ({ trace, title }) => {
             return startValue + (targetValue - startValue) * progress;
           })
         };
-
         setAnimatedData(newData);
-
         if (step >= steps) {
           clearInterval(animation);
           setAnimatedData(trace);
         }
       }, interval);
-
       return () => clearInterval(animation);
     }
   }, [isVisible, trace]);
@@ -385,6 +382,7 @@ const AnimatedGraph = ({ trace, title }) => {
 ////////////////////////////////////////
 // 5) 메인 컴포넌트 (DashPage)
 ////////////////////////////////////////
+
 function DashPage() {
   // KPI & 데이터
   const [kpis, setKpis] = useState({});
@@ -393,15 +391,14 @@ function DashPage() {
   const [monthlyData, setMonthlyData] = useState([]);
   const [categoryPie, setCategoryPie] = useState([]);
   const [lowStock, setLowStock] = useState([]);
-  const [rising, setRising] = useState({ rise_rate: 0, subcat_list: [] });
+  const [rising, setRising] = useState({ subcat_list: [] });
 
-  // 상/하위 10
+  // 상/하위 10 (이전 코드 그대로 사용)
   const [top10, setTop10] = useState([]);
   const [bottom10, setBottom10] = useState([]);
   const [lastMonthCol, setLastMonthCol] = useState("");
 
   // 예: 상위 5개 트렌드 상품 (Watchlist 용)
-  // 실제로는 서버 API 등에서 가져오거나, rising 등에서 가공해도 됨
   const [topTrends, setTopTrends] = useState([
     {
       icon: "https://img1.daumcdn.net/thumb/C500x500.fjpg/?fname=http://t1.daumcdn.net/brunch/service/user/c86j/image/MwGCP7OUtNBhaP4LtP1Xcebp3tM.heic",
@@ -465,6 +462,7 @@ function DashPage() {
         setLowStock(lowRes.data);
 
         const risingRes = await axios.get(`${API_BASE}/api/rising-subcategories`);
+        // now risingRes.data is { subcategories: [ { name, rise_ratio }, ... ] }
         setRising(risingRes.data);
 
         const topBottomRes = await axios.get(`${API_BASE}/api/topbottom`);
@@ -591,42 +589,80 @@ function DashPage() {
   ];
 
   ////////////////////////////////////////
-  // 상/하위 10
+  // 상/하위 10 -> 여기서는 Top3와 Bottom3로 수정
   ////////////////////////////////////////
   function getVal(obj) {
     return lastMonthCol ? (obj[lastMonthCol] || 0) : 0;
   }
-  const sortedTop10 = [...top10].sort((a, b) => getVal(a) - getVal(b)).slice(0, 10);
-  const sortedBottom10 = [...bottom10].sort((a, b) => getVal(b) - getVal(a)).slice(0, 10);
+  // 1) 매출 내림차순 정렬 후 상위 3개 추출
+  const sortedTop3 = [...top10]
+    .sort((a, b) => getVal(b) - getVal(a))
+    .slice(0, 3);
 
-  const topIDs = sortedTop10.map(item => item.ID);
-  const topVals = sortedTop10.map(item => getVal(item));
-  const topColors = sortedTop10.map((item, i) => reds[reds.length - 1 - i] || "#FEEAEA");
-  const bottomIDs = sortedBottom10.map(item => item.ID);
-  const bottomVals = sortedBottom10.map(item => getVal(item));
-  const bottomColors = sortedBottom10.map((item, i) => blues[i] || "#4567A9");
+  // 2) 포디엄 순서 [2등, 1등, 3등] 으로 재배치
+  const bestPodiumOrder =
+    sortedTop3.length === 3
+      ? [sortedTop3[1], sortedTop3[0], sortedTop3[2]]
+      : sortedTop3;
 
-  const top10Trace = {
-    x: topVals,
-    y: topIDs,
-    type: "bar",
-    orientation: "h",
-    marker: { color: topColors }
+  // 3) 각 순위별 “블록 높이”를 다르게 설정
+  //    (예: 1등이 가장 높고, 2등이 중간, 3등이 낮음)
+  const bestHeightMap = {
+    1: "200px", // 1등 크게
+    2: "150px",
+    3: "120px"
   };
-  const bottom10Trace = {
-    x: bottomVals,
-    y: bottomIDs,
+  const bestColorMap = {
+    1: "#ffef99",  // 1등
+    2: "#cfcfcf",  // 2등
+    3: "#ffd1a9"   // 3등
+  };
+  // 1) 매출 오름차순 정렬 후 하위 3개 추출
+  //    => [0] = 가장 낮은 매출(=1등)
+  const sortedBottom3 = [...bottom10]
+    .sort((a, b) => getVal(a) - getVal(b))
+    .slice(0, 3);
+
+  // 2) 포디엄 순서 [2등, 1등, 3등] 으로 재배치
+  const worstPodiumOrder =
+    sortedBottom3.length === 3
+      ? [sortedBottom3[1], sortedBottom3[0], sortedBottom3[2]]
+      : sortedBottom3;
+
+  // 3) 각 순위별 블록 높이 (이번에는 1등이 가장 낮게)
+  const worstHeightMap = {
+    1: "100px",  // 1등(최저)
+    2: "140px",
+    3: "180px"   // 3등(가장 높게)
+  };
+  const worstColorMap = {
+    1: "#ffdce0", // 1등
+    2: "#ffe6e9", // 2등
+    3: "#fff0f2"  // 3등
+  };
+  // 상위/하위 Top3를 위한 트레이스 생성 (아래에서 사용)
+  const top10Trace = {
+    x: bestPodiumOrder.map(item => getVal(item)),
+    y: bestPodiumOrder.map(item => item.ID),
     type: "bar",
     orientation: "h",
-    marker: { color: bottomColors }
+    marker: { color: bestPodiumOrder.map((_, i) => reds[reds.length - 1 - i] || "#FEEAEA") }
+  };
+
+  const bottom10Trace = {
+    x: worstPodiumOrder.map(item => getVal(item)),
+    y: worstPodiumOrder.map(item => item.ID),
+    type: "bar",
+    orientation: "h",
+    marker: { color: worstPodiumOrder.map((_, i) => blues[i] || "#4567A9") }
   };
 
   const topTitle = lastMonthCol
-    ? `${lastMonthCol} 월 매출 상위 10개 ID`
-    : "상위 10개";
+    ? `${lastMonthCol} 월 매출 상위 3개 ID`
+    : "상위 3개";
   const bottomTitle = lastMonthCol
-    ? `${lastMonthCol} 월 매출 하위 10개 ID`
-    : "하위 10개";
+    ? `${lastMonthCol} 월 매출 하위 3개 ID`
+    : "하위 3개";
 
   // (급상승 품목) CSS
   const itemStyle = {
@@ -685,6 +721,8 @@ function DashPage() {
   ////////////////////////////////////////
   // 렌더링
   ////////////////////////////////////////
+  const [selectedPeriod, setPeriod] = useState("일간");
+
   return (
     <div style={PAGE_STYLE}>
       <h1 style={TITLE_STYLE}>데이터 대시보드</h1>
@@ -778,6 +816,7 @@ function DashPage() {
             <polyline points="17 6 23 6 23 12" />
           </svg>
         </h2>
+
         <div style={{
           display: "flex",
           flexDirection: "row",
@@ -811,25 +850,30 @@ function DashPage() {
             zIndex: 1
           }} />
 
-          <div style={{
-            display: "flex",
-            animation: "slide 30s linear infinite",
-            whiteSpace: "nowrap"
-          }}>
-            {[...rising.subcat_list, ...rising.subcat_list, ...rising.subcat_list].map((subcat, idx) => (
-              <div
-                key={idx}
-                style={{
-                  ...itemStyle,
-                  margin: "5px 10px"
-                }}
-              >
-                {subcat}
-              </div>
-            ))}
-          </div>
+          {rising.subcat_list.length > 0 ? (
+            <div style={{
+              display: "flex",
+              animation: `slide 30s linear infinite`,
+              whiteSpace: "nowrap"
+            }}>
+              {[...rising.subcat_list, ...rising.subcat_list, ...rising.subcat_list].map((subcat, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    ...itemStyle,
+                    margin: "5px 10px"
+                  }}
+                >
+                  {subcat}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={{ textAlign: "center", fontSize: "16px", color: "#666" }}>급상승 품목 없음</p>
+          )}
+
           <style>
-            {`
+            {rising.subcat_list.length > 0 ? `
               @keyframes slide {
                 0% {
                   transform: translateX(0);
@@ -838,211 +882,325 @@ function DashPage() {
                   transform: translateX(calc(-225px * ${rising.subcat_list.length}));
                 }
               }
-            `}
+            ` : ""}
           </style>
         </div>
       </div>
-
-      {/* 상/하위 10개 */}
-      <div style={ROW_STYLE}>
+      {/*
+        (1) 일간/주간/월간 KPI 카드 3개
+        (2) 오른쪽에 "Trend-list" 박스
+        => 둘 다 BOX_CONTAINER_STYLE
+      */}
+      <div style={{
+        display: "flex",
+        flexDirection: "row",
+        justifyContent: "center",
+        alignItems: "flex-start",
+        width: "100%",
+        maxWidth: "2100px",
+        padding: "0 20px",
+        marginBottom: "20px",
+        margin: "0 auto"
+      }}>
+        {/* 왼쪽: 통합 KPI 카드 */}
         <div style={{
-          ...SECTION_STYLE,
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center'
-        }}>
-          <Plot
-            data={[top10Trace]}
-            layout={{
-              title: {
-                text: topTitle,
-                font: { size: 18, color: '#333', family: "Arial, sans-serif", weight: "bold" }
-              },
-              xaxis: {
-                title: {
-                  text: "매출액",
-                  font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
-                }
-              },
-              yaxis: {
-                title: {
-                  text: "ID",
-                  font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
-                },
-                type: "category"
-              },
-              title_x: 0.5,
-              height: 600,
-              margin: { l: 50, r: 50, t: 200, b: 100 }
-            }}
-          />
-        </div>
-        <div style={{
-          ...SECTION_STYLE,
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center'
-        }}>
-          <Plot
-            data={[bottom10Trace]}
-            layout={{
-              title: {
-                text: bottomTitle,
-                font: { size: 18, color: '#333', family: "Arial, sans-serif", weight: "bold" }
-              },
-              xaxis: {
-                title: {
-                  text: "매출액",
-                  font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
-                }
-              },
-              yaxis: {
-                title: {
-                  text: "ID",
-                  font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
-                },
-                type: "category"
-              },
-              title_x: 0.5,
-              height: 600,
-              margin: { l: 50, r: 50, t: 200, b: 100 }
-            }}
-          />
-        </div>
-      </div>
-
-      {/* 트렌드/리콜 상품 */}
-      <div style={ROW_STYLE}>
-        <div style={SECTION_STYLE}>
-          <h2 style={{ textAlign: "center", fontWeight: "bold" }}>트렌드 상품</h2>
-          <div style={{
-            height: "400px",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center"
-          }}>
-            <img
-              src="https://img1.daumcdn.net/thumb/R720x0.q80/?scode=mtistory2&fname=https%3A%2F%2Ft1.daumcdn.net%2Fcfile%2Ftistory%2F9994274C5AE78D7305"
-              alt="trend"
-              style={{
-                width: "200px",
-                height: "200px",
-                objectFit: "contain"
-              }}
-            />
-          </div>
-        </div>
-        <div style={SECTION_STYLE}>
-          <h2 style={{ textAlign: "center", fontWeight: "bold" }}>리콜 상품</h2>
-          <div style={{
-            height: "400px",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center"
-          }}>
-            <img
-              src="https://i.pinimg.com/originals/af/51/13/af5113b12c2e068f9f675dfbed16e4ad.gif"
-              alt="recall"
-              style={{
-                width: "200px",
-                height: "200px",
-                objectFit: "contain"
-              }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* 파이차트 + 재고수량 */}
-      <div style={ROW_STYLE}>
-        <div style={{
-          ...SECTION_STYLE,
-          width: "38%",
-          height: "400px",
+          ...KPI_CARD_CONTAINER_STYLE,
+          width: "70%",
+          marginRight: "20px",
+          height: "600px",
           display: "flex",
           flexDirection: "column",
-          justifyContent: "center",
-          alignItems: "center",
           position: "relative"
         }}>
-          <h2 style={{
-            textAlign: "center",
-            fontWeight: "bold",
+          {/* 기간 선택 버튼 컨테이너 */}
+          <div style={{
+            display: "flex",
+            gap: "15px",
+            justifyContent: "center",
             position: "absolute",
             top: "20px",
-            width: "100%"
-          }}>카테고리별 매출 파이차트</h2>
-          <Plot
-            data={[{
-              ...pieData[0],
-              hole: 0.4,
-              pull: pieData[0].values.map((val, idx) =>
-                idx === pieData[0].values.indexOf(Math.max(...pieData[0].values)) ? 0.1 : 0
-              ),
-              marker: {
-                colors: [
-                  '#FF8BA7',
-                  '#7EC4CF',
-                  '#FFB347',
-                  '#98D8C1',
-                  '#B5A8FF'
-                ]
-              },
-              type: 'pie',
-              shadow: 0.5,
-              scalegroup: 1
-            }]}
-            layout={{
-              width: 600,
-              height: 500,
-              showlegend: true,
-              legend: {
-                orientation: "v",
-                xanchor: "left",
-                yanchor: "middle",
-                x: 1.2,
-                y: 0.5
-              },
-              margin: { l: 50, r: 200, t: 50, b: 50 },
-              paper_bgcolor: 'rgba(0,0,0,0)',
-              plot_bgcolor: 'rgba(0,0,0,0)',
-              scene: {
-                camera: {
-                  eye: { x: 2, y: 2, z: 2 }
-                }
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 1,
+            padding: "10px 20px",
+            background: "rgba(250, 250, 250, 0.95)",
+            borderRadius: "30px",
+            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.06)",
+            backdropFilter: "blur(8px)",
+            border: "1px solid rgba(240, 240, 240, 0.8)"
+          }}>
+            {["일간", "주간", "월간"].map((period) => (
+              <button
+                key={period}
+                onClick={() => setPeriod(period)}
+                style={{
+                  padding: "12px 28px",
+                  borderRadius: "20px",
+                  border: "none",
+                  background: period === selectedPeriod
+                    ? "linear-gradient(145deg, #505764, #6E7A8A)"
+                    : "rgba(255, 255, 255, 0.9)",
+                  color: period === selectedPeriod ? "white" : "#505764",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                  fontWeight: period === selectedPeriod ? "600" : "500",
+                  fontSize: "14px",
+                  letterSpacing: "0.5px",
+                  boxShadow: period === selectedPeriod
+                    ? "0 8px 16px rgba(80, 87, 100, 0.15)"
+                    : "0 4px 12px rgba(0, 0, 0, 0.03)",
+                  transform: period === selectedPeriod
+                    ? "translateY(-1px)"
+                    : "translateY(0)",
+                  position: "relative",
+                  overflow: "hidden",
+                  minWidth: "110px",
+                  border: period === selectedPeriod
+                    ? "none"
+                    : "1px solid rgba(80, 87, 100, 0.12)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: "'Pretendard', sans-serif",
+                  WebkitFontSmoothing: "antialiased",
+                  MozOsxFontSmoothing: "grayscale",
+                  "&:hover": {
+                    transform: period === selectedPeriod
+                      ? "translateY(-1px)"
+                      : "translateY(-1px)",
+                    boxShadow: period === selectedPeriod
+                      ? "0 10px 20px rgba(80, 87, 100, 0.2)"
+                      : "0 6px 16px rgba(0, 0, 0, 0.06)",
+                    background: period === selectedPeriod
+                      ? "linear-gradient(145deg, #576171, #6E7A8A)"
+                      : "rgba(255, 255, 255, 1)",
+                  },
+                  "&:active": {
+                    transform: "translateY(0)",
+                    boxShadow: period === selectedPeriod
+                      ? "0 5px 10px rgba(80, 87, 100, 0.1)"
+                      : "0 2px 8px rgba(0, 0, 0, 0.04)",
+                  }
+                }}
+              >
+                {period}
+              </button>
+            ))}
+          </div>
+
+          <div style={KPI_CARD_TITLE_STYLE}>매출 현황</div>
+
+          {/* 선택된 기간에 따른 KPI 값 표시 */}
+          <h2 style={KPI_MAIN_VALUE_STYLE}>
+            {formatCurrency(
+              selectedPeriod === "일간" ? dailyVals.current :
+                selectedPeriod === "주간" ? weeklyVals.current :
+                  monthlyVals.current
+            )}
+          </h2>
+
+          {/* 증감률 표시 */}
+          <div style={KPI_DIFF_CONTAINER_STYLE}>
+            <span style={KPI_DIFF_PERCENT_STYLE(
+              selectedPeriod === "일간" ? dailyDiff >= 0 :
+                selectedPeriod === "주간" ? weeklyDiff >= 0 :
+                  monthlyDiff >= 0
+            )}>
+              {selectedPeriod === "일간" ? `${dailyDiffPct >= 0 ? '+' : ''}${dailyDiffPct.toFixed(2)}%` :
+                selectedPeriod === "주간" ? `${weeklyDiffPct >= 0 ? '+' : ''}${weeklyDiffPct.toFixed(2)}%` :
+                  `${monthlyDiffPct >= 0 ? '+' : ''}${monthlyDiffPct.toFixed(2)}%`}
+            </span>
+            <span style={KPI_DIFF_TEXT_STYLE}>
+              {`${Math.abs(
+                selectedPeriod === "일간" ? dailyDiff :
+                  selectedPeriod === "주간" ? weeklyDiff :
+                    monthlyDiff
+              ).toLocaleString()} ${selectedPeriod === "일간" ? "than yesterday" :
+                selectedPeriod === "주간" ? "than last week" :
+                  "than last month"
+                }`}
+            </span>
+          </div>
+
+          {/* 그래프 */}
+          <div style={{
+            ...KPI_GRAPH_WRAPPER_STYLE,
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center"
+          }}>
+            <Plot
+              data={
+                selectedPeriod === "일간" ? dailyPlotData :
+                  selectedPeriod === "주간" ? weeklyPlotData :
+                    monthlyPlotData
               }
-            }}
-          />
+              layout={{
+                ...dailyPlotLayout,
+                width: undefined,
+                height: 400,
+                autosize: true,
+                title: {
+                  text: `${selectedPeriod} 매출 그래프`,
+                  font: { size: 18, color: '#333', family: "Arial, sans-serif", weight: "bold" },
+                  y: 0.95
+                },
+                xaxis: {
+                  title: {
+                    text: "매출액",
+                    font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
+                  }
+                },
+                yaxis: {
+                  title: {
+                    text: "날짜",
+                    font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
+                  }
+                },
+                margin: {
+                  l: 80,
+                  r: 50,
+                  t: 50,
+                  b: 50
+                },
+                paper_bgcolor: 'white',
+                plot_bgcolor: 'white'
+              }}
+              style={{ width: "100%" }}
+              useResizeHandler={true}
+              config={{ displayModeBar: false, responsive: true }}
+            />
+          </div>
         </div>
+
+        {/* 오른쪽: Trend-list (Watchlist) */}
+        <div style={WATCHLIST_CONTAINER_STYLE}>
+          <div style={WATCHLIST_HEADER_STYLE}>
+            <div style={WATCHLIST_TITLE_STYLE}>Trend-list</div>
+          </div>
+          <div style={WATCHLIST_ITEMS_CONTAINER}>
+            {topTrends.slice(0, 5).map((item, idx) => (
+              <WatchListItem key={idx} item={item} />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Best Top 3 & Worst Top 3 중앙 정렬 */}
+      <div style={{
+        display: "flex",
+        justifyContent: "center",  // 🔹 가로 정렬을 중앙으로 변경
+        alignItems: "center",
+        gap: "40px",               // 🔹 두 블록 사이 여백 추가
+        marginTop: "20px"
+      }}>
+        {/* Best Top 3 */}
         <div style={{
           ...SECTION_STYLE,
-          width: "58%",
-          overflowY: "auto",
-          height: "400px"
+          flex: 1,                  // 🔹 양쪽 블록 크기 균등 배치
+          maxWidth: "500px",
+          height: "400px",          // 🔹 **배경 블록 크기를 동일하게 조정**
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center"
         }}>
-          <h2 style={{ textAlign: "center", fontWeight: "bold" }}>재고수량</h2>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center" }}>
-            <thead style={{ backgroundColor: "#f4f4f4" }}>
-              <tr>
-                <th style={{ border: "1px solid #ccc" }}>ID</th>
-                <th style={{ border: "1px solid #ccc" }}>상품명</th>
-                <th style={{ border: "1px solid #ccc" }}>재고수량</th>
-                <th style={{ border: "1px solid #ccc" }}>일판매수량</th>
-                <th style={{ border: "1px solid #ccc" }}>남은 재고</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lowStock.map((item, idx) => (
-                <tr key={idx}>
-                  <td style={{ border: "1px solid #ccc" }}>{item.ID}</td>
-                  <td style={{ border: "1px solid #ccc" }}>{item.Sub3}</td>
-                  <td style={{ border: "1px solid #ccc" }}>{item.재고수량}</td>
-                  <td style={{ border: "1px solid #ccc" }}>{item.일판매수량}</td>
-                  <td style={{ border: "1px solid #ccc" }}>{item["남은 재고"]}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <h2 style={TITLE_STYLE}>매출 Best Top 3 🏆</h2>
+          <div style={{
+            display: "flex",
+            justifyContent: "center", // 🔹 내부 아이템 중앙 정렬
+            alignItems: "flex-end",
+            gap: "20px"
+          }}>
+            {bestPodiumOrder.map((item, idx) => {
+              const rank = idx === 0 ? 2 : idx === 1 ? 1 : 3;
+              return (
+                <div key={item.ID} style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "flex-end",
+                  width: "80px",
+                  height: bestHeightMap[rank],
+                  backgroundColor: bestColorMap[rank],
+                  borderRadius: "10px",
+                  padding: "10px",
+                  boxShadow: rank === 1
+                    ? "0 0 10px rgba(255,215,0,0.7)"
+                    : "0 4px 10px rgba(0, 0, 0, 0.1)"
+                }}>
+                  <div style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "5px" }}>
+                    {item.ID}
+                  </div>
+                  <div style={{ fontSize: "14px", color: "#333", marginBottom: "5px" }}>
+                    {formatCurrency(getVal(item))}
+                  </div>
+                  <div style={{
+                    fontSize: "14px",
+                    fontWeight: rank === 1 ? "bold" : "normal",
+                    color: rank === 1 ? "#D17A00" : "#666"
+                  }}>
+                    {rank}등
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Worst Top 3 */}
+        <div style={{
+          ...SECTION_STYLE,
+          flex: 1,                  // 🔹 양쪽 블록 크기 균등 배치
+          maxWidth: "500px",
+          height: "400px",          // 🔹 **배경 블록 크기를 동일하게 조정**
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center"
+        }}>
+          <h2 style={TITLE_STYLE}>매출 Worst Top 3 😭</h2>
+          <div style={{
+            display: "flex",
+            justifyContent: "center", // 🔹 내부 아이템 중앙 정렬
+            alignItems: "flex-end",
+            gap: "20px"
+          }}>
+            {worstPodiumOrder.map((item, idx) => {
+              const rank = idx === 0 ? 2 : idx === 1 ? 1 : 3;
+              return (
+                <div key={item.ID} style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "flex-end",
+                  width: "80px",
+                  height: worstHeightMap[rank],
+                  backgroundColor: worstColorMap[rank],
+                  borderRadius: "10px",
+                  padding: "10px",
+                  boxShadow: rank === 1
+                    ? "0 0 10px rgba(255,0,0,0.3)"
+                    : "0 4px 10px rgba(0, 0, 0, 0.1)"
+                }}>
+                  <div style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "5px" }}>
+                    {item.ID}
+                  </div>
+                  <div style={{ fontSize: "14px", color: "#333", marginBottom: "5px" }}>
+                    {formatCurrency(getVal(item))}
+                  </div>
+                  <div style={{
+                    fontSize: "14px",
+                    fontWeight: rank === 1 ? "bold" : "normal",
+                    color: rank === 1 ? "#C40000" : "#666"
+                  }}>
+                    {rank}등
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
