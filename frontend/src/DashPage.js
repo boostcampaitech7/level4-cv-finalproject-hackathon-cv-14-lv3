@@ -123,26 +123,27 @@ const WATCHLIST_ITEM_STYLE = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  padding: "8px 0",
+  padding: "15px 0",
   borderBottom: "1px solid #f0f0f0",
-  fontSize: "15px"
+  fontSize: "16px"
 };
 const WATCHLIST_ITEM_LEFT_STYLE = {
   display: "flex",
   alignItems: "center"
 };
 const WATCHLIST_LOGO_STYLE = {
-  width: "32px",
-  height: "32px",
+  width: "40px",
+  height: "40px",
   borderRadius: "50%",
-  marginRight: "8px",
+  marginRight: "12px",
   objectFit: "cover"
 };
 const WATCHLIST_ITEM_NAME_STYLE = {
-  fontWeight: "bold"
+  fontWeight: "bold",
+  fontSize: "16px"
 };
 const WATCHLIST_ITEM_SUBNAME_STYLE = {
-  fontSize: "13px",
+  fontSize: "14px",
   color: "#999"
 };
 const WATCHLIST_ITEM_RIGHT_STYLE = {
@@ -685,6 +686,8 @@ function DashPage() {
   ////////////////////////////////////////
   // 렌더링
   ////////////////////////////////////////
+  const [selectedPeriod, setPeriod] = useState("일간");
+
   return (
     <div style={PAGE_STYLE}>
       <h1 style={TITLE_STYLE}>데이터 대시보드</h1>
@@ -730,44 +733,192 @@ function DashPage() {
         flexDirection: "row",
         justifyContent: "center",
         alignItems: "flex-start",
-        flexWrap: "wrap"
+        width: "100%",
+        maxWidth: "2100px",
+        padding: "0 20px",
+        marginBottom: "20px",
+        margin: "0 auto"
       }}>
-        {/* 왼쪽: KPI 카드 3개 */}
-        <div style={{ display: "flex", flexWrap: "wrap" }}>
-          {/* 일간 카드 */}
-          <KpiCard
-            title="일간 매출"
-            currentValue={dailyVals.current}
-            diffValue={dailyDiff}
-            diffPercent={dailyDiffPct}
-            prevLabel="than yesterday"
-            plotData={dailyPlotData}
-            plotLayout={dailyPlotLayout}
-          />
-          {/* 주간 카드 */}
-          <KpiCard
-            title="주간 매출"
-            currentValue={weeklyVals.current}
-            diffValue={weeklyDiff}
-            diffPercent={weeklyDiffPct}
-            prevLabel="than last week"
-            plotData={weeklyPlotData}
-            plotLayout={weeklyPlotLayout}
-          />
-          {/* 월간 카드 */}
-          <KpiCard
-            title="월간 매출"
-            currentValue={monthlyVals.current}
-            diffValue={monthlyDiff}
-            diffPercent={monthlyDiffPct}
-            prevLabel="than last month"
-            plotData={monthlyPlotData}
-            plotLayout={monthlyPlotLayout}
-          />
+        {/* 왼쪽: 통합 KPI 카드 */}
+        <div style={{ 
+          ...KPI_CARD_CONTAINER_STYLE, 
+          width: "70%",
+          marginRight: "20px",
+          height: "600px",
+          display: "flex",
+          flexDirection: "column",
+          position: "relative"
+        }}>
+          {/* 기간 선택 버튼 컨테이너 */}
+          <div style={{
+            display: "flex",
+            gap: "15px",
+            justifyContent: "center",
+            position: "absolute",
+            top: "20px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 1,
+            padding: "10px 20px",
+            background: "rgba(250, 250, 250, 0.95)",
+            borderRadius: "30px",
+            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.06)",
+            backdropFilter: "blur(8px)",
+            border: "1px solid rgba(240, 240, 240, 0.8)"
+          }}>
+            {["일간", "주간", "월간"].map((period) => (
+              <button
+                key={period}
+                onClick={() => setPeriod(period)}
+                style={{
+                  padding: "12px 28px",
+                  borderRadius: "20px",
+                  border: "none",
+                  background: period === selectedPeriod 
+                    ? "linear-gradient(145deg, #505764, #6E7A8A)"
+                    : "rgba(255, 255, 255, 0.9)",
+                  color: period === selectedPeriod ? "white" : "#505764",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                  fontWeight: period === selectedPeriod ? "600" : "500",
+                  fontSize: "14px",
+                  letterSpacing: "0.5px",
+                  boxShadow: period === selectedPeriod 
+                    ? "0 8px 16px rgba(80, 87, 100, 0.15)"
+                    : "0 4px 12px rgba(0, 0, 0, 0.03)",
+                  transform: period === selectedPeriod 
+                    ? "translateY(-1px)"
+                    : "translateY(0)",
+                  position: "relative",
+                  overflow: "hidden",
+                  minWidth: "110px",
+                  border: period === selectedPeriod
+                    ? "none"
+                    : "1px solid rgba(80, 87, 100, 0.12)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontFamily: "'Pretendard', sans-serif",
+                  WebkitFontSmoothing: "antialiased",
+                  MozOsxFontSmoothing: "grayscale",
+                  "&:hover": {
+                    transform: period === selectedPeriod 
+                      ? "translateY(-1px)"
+                      : "translateY(-1px)",
+                    boxShadow: period === selectedPeriod 
+                      ? "0 10px 20px rgba(80, 87, 100, 0.2)"
+                      : "0 6px 16px rgba(0, 0, 0, 0.06)",
+                    background: period === selectedPeriod 
+                      ? "linear-gradient(145deg, #576171, #6E7A8A)"
+                      : "rgba(255, 255, 255, 1)",
+                  },
+                  "&:active": {
+                    transform: "translateY(0)",
+                    boxShadow: period === selectedPeriod 
+                      ? "0 5px 10px rgba(80, 87, 100, 0.1)"
+                      : "0 2px 8px rgba(0, 0, 0, 0.04)",
+                  }
+                }}
+              >
+                {period}
+              </button>
+            ))}
+          </div>
+
+          <div style={KPI_CARD_TITLE_STYLE}>매출 현황</div>
+          
+          {/* 선택된 기간에 따른 KPI 값 표시 */}
+          <h2 style={KPI_MAIN_VALUE_STYLE}>
+            {formatCurrency(
+              selectedPeriod === "일간" ? dailyVals.current :
+              selectedPeriod === "주간" ? weeklyVals.current :
+              monthlyVals.current
+            )}
+          </h2>
+
+          {/* 증감률 표시 */}
+          <div style={KPI_DIFF_CONTAINER_STYLE}>
+            <span style={KPI_DIFF_PERCENT_STYLE(
+              selectedPeriod === "일간" ? dailyDiff >= 0 :
+              selectedPeriod === "주간" ? weeklyDiff >= 0 :
+              monthlyDiff >= 0
+            )}>
+              {selectedPeriod === "일간" ? `${dailyDiffPct >= 0 ? '+' : ''}${dailyDiffPct.toFixed(2)}%` :
+               selectedPeriod === "주간" ? `${weeklyDiffPct >= 0 ? '+' : ''}${weeklyDiffPct.toFixed(2)}%` :
+               `${monthlyDiffPct >= 0 ? '+' : ''}${monthlyDiffPct.toFixed(2)}%`}
+            </span>
+            <span style={KPI_DIFF_TEXT_STYLE}>
+              {`${Math.abs(
+                selectedPeriod === "일간" ? dailyDiff :
+                selectedPeriod === "주간" ? weeklyDiff :
+                monthlyDiff
+              ).toLocaleString()} ${
+                selectedPeriod === "일간" ? "than yesterday" :
+                selectedPeriod === "주간" ? "than last week" :
+                "than last month"
+              }`}
+            </span>
+          </div>
+
+          {/* 그래프 */}
+          <div style={{
+            ...KPI_GRAPH_WRAPPER_STYLE,
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center"
+          }}>
+            <Plot
+              data={
+                selectedPeriod === "일간" ? dailyPlotData :
+                selectedPeriod === "주간" ? weeklyPlotData :
+                monthlyPlotData
+              }
+              layout={{
+                ...dailyPlotLayout,
+                width: undefined,
+                height: 400,
+                autosize: true,
+                title: {
+                  text: `${selectedPeriod} 매출 그래프`,
+                  font: { size: 18, color: '#333', family: "Arial, sans-serif", weight: "bold" },
+                  y: 0.95
+                },
+                xaxis: {
+                  title: {
+                    text: "매출액",
+                    font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
+                  }
+                },
+                yaxis: {
+                  title: {
+                    text: "날짜",
+                    font: { size: 14, family: "Arial, sans-serif", weight: "bold" }
+                  }
+                },
+                margin: {
+                  l: 80,
+                  r: 50,
+                  t: 50,
+                  b: 50
+                },
+                paper_bgcolor: 'white',
+                plot_bgcolor: 'white'
+              }}
+              style={{ width: "100%" }}
+              useResizeHandler={true}
+              config={{ displayModeBar: false, responsive: true }}
+            />
+          </div>
         </div>
 
         {/* 오른쪽: Trend-list (Watchlist) */}
-        <div style={WATCHLIST_CONTAINER_STYLE}>
+        <div style={{ 
+          ...WATCHLIST_CONTAINER_STYLE,
+          width: "25%",
+          height: "600px",
+          overflowY: "auto"
+        }}>
           <div style={WATCHLIST_HEADER_STYLE}>
             <div style={WATCHLIST_TITLE_STYLE}>Trend-list</div>
           </div>
