@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import axios from 'axios';
 import Plot from 'react-plotly.js';
 
@@ -49,12 +49,11 @@ const GRAPH_STYLE = {
   boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.1)"
 };
 const KPI_ALL_STYLE = {
-  marginTop: "20px",
-  marginBottom: "20px",
-  border: "1px solid #e0e0e0",
-  borderRadius: "10px",
-  boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.1)",
+  marginTop: "10px",
+  marginBottom: "10px",
+  backgroundColor: "#f4f4f9",
   width: "95%",
+  maxWidth: "2100px",
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
@@ -469,6 +468,9 @@ function DashPage() {
         setTop10(topBottomRes.data.top_10 || []);
         setBottom10(topBottomRes.data.bottom_10 || []);
         setLastMonthCol(topBottomRes.data.last_month_col || "");
+
+        const topSalesRes = await axios.get(`${API_BASE}/api/top-sales-items`);
+        setTopSalesItems(topSalesRes.data);
       } catch (err) {
         console.error(err);
       }
@@ -605,7 +607,7 @@ function DashPage() {
       ? [sortedTop3[1], sortedTop3[0], sortedTop3[2]]
       : sortedTop3;
 
-  // 3) 각 순위별 “블록 높이”를 다르게 설정
+  // 3) 각 순위별 "블록 높이"를 다르게 설정
   //    (예: 1등이 가장 높고, 2등이 중간, 3등이 낮음)
   const bestHeightMap = {
     1: "200px", // 1등 크게
@@ -722,6 +724,124 @@ function DashPage() {
   // 렌더링
   ////////////////////////////////////////
   const [selectedPeriod, setPeriod] = useState("일간");
+  const [topSalesItems, setTopSalesItems] = useState([]);
+
+  const TopSalesItem = ({ item }) => {
+    // 컴포넌트 마운트 시 한 번만 데이터 생성하도록 useMemo 사용
+    const sparklineData = useMemo(() => {
+      const points = Array.from({ length: 20 }, (_, i) => {
+        const trend = item.change_rate >= 0 ? 1 : -1;
+        return 50 + trend * (Math.random() * 15 + Math.sin(i/3) * 10 + i * 2);
+      });
+      return points;
+    }, [item.change_rate]); // item.change_rate가 변경될 때만 재계산
+
+    const isPositive = item.change_rate >= 0;
+    const gradientColor = isPositive ? 
+      'rgba(220, 53, 69, 0.1)' : 
+      'rgba(0, 123, 255, 0.1)';
+
+    // Plot 컴포넌트의 설정을 미리 메모이제이션
+    const plotConfig = useMemo(() => ({
+      data: [{
+        y: sparklineData,
+        type: 'scatter',
+        mode: 'lines',
+        fill: 'tonexty',
+        line: {
+          color: isPositive ? '#dc3545' : '#007bff',
+          width: 2,
+          shape: 'spline'
+        },
+        fillcolor: gradientColor
+      }],
+      layout: {
+        width: 150,  // 그래프 크기 증가
+        height: 80,  // 그래프 크기 증가
+        margin: { l: 0, r: 0, t: 0, b: 0 },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        xaxis: { 
+          visible: false,
+          showgrid: false
+        },
+        yaxis: { 
+          visible: false,
+          showgrid: false
+        }
+      },
+      config: { 
+        displayModeBar: false,
+        responsive: true
+      }
+    }), [sparklineData, isPositive, gradientColor]);
+
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        padding: '25px',
+        backgroundColor: 'white',
+        borderRadius: '16px',
+        boxShadow: '0 8px 16px rgba(0, 0, 0, 0.08)',
+        margin: '10px',
+        width: 'calc(20% - 30px)',
+        minWidth: '300px',
+        height: '140px',
+        transition: 'transform 0.2s, box-shadow 0.2s',
+        ':hover': {
+          transform: 'translateY(-5px)',
+          boxShadow: '0 12px 20px rgba(0, 0, 0, 0.12)'
+        }
+      }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ 
+            fontWeight: '600', 
+            fontSize: '18px',
+            marginBottom: '12px',
+            color: '#2c3e50'
+          }}>
+            {item.name}
+          </div>
+          <div style={{
+            color: isPositive ? '#dc3545' : '#007bff',
+            fontWeight: '600',
+            fontSize: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}>
+            {isPositive ? '↑' : '↓'} 
+            {Math.abs(item.change_rate).toFixed(1)}%
+          </div>
+        </div>
+        <div style={{ width: '150px', height: '80px' }}>
+          <Plot
+            {...plotConfig}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  // TopSalesItems를 감싸는 컨테이너 스타일
+  const TOP_SALES_CONTAINER_STYLE = {
+    display: "flex",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "nowrap",
+    gap: "15px",
+    overflowX: "auto",
+    padding: "15px 0",
+    width: "100%",
+    maxWidth: "100%",
+    scrollbarWidth: 'none',
+    msOverflowStyle: 'none',
+    '&::-webkit-scrollbar': {
+      display: 'none'
+    }
+  };
 
   return (
     <div style={PAGE_STYLE}>
@@ -732,9 +852,10 @@ function DashPage() {
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        width: "80%", // 🔹 가로 크기 조정 (너무 길지 않게)
+        width: "95%",
+        maxWidth: "2100px",
         margin: "30px auto",
-        gap: "15px"  // 🔹 카드 사이 여백 조정
+        gap: "15px"
       }}>
         {[
           { title: "연간 매출", value: kpis.annual_sales, diff: 0 }, // 연간 매출은 증감률 없음
@@ -743,21 +864,20 @@ function DashPage() {
           { title: "월간 매출", value: weeklyVals.current, diff: weeklyDiffPct }
         ].map(({ title, value, diff }, idx) => (
           <div key={idx} style={{
-            backgroundColor: "#f8f9fa",  // 🔹 배경색 조정
+            backgroundColor: "#f8f9fa",
             borderRadius: "10px",
             boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.1)",
             padding: "15px 20px",
-            width: "23%",  // 🔹 크기 고정
-            minWidth: "180px",
-            textAlign: "left"
+            width: "calc(25% - 15px)",
+            minWidth: "200px"
           }}>
             {/* 타이틀 */}
             <h3 style={{
-              fontSize: "12px",      // 🔹 글자 크기 조정
+              fontSize: "12px",
               fontWeight: "bold",
               color: "#777",
               marginBottom: "8px",
-              letterSpacing: "1px",  // 🔹 대문자 간격 추가
+              letterSpacing: "1px",
               textTransform: "uppercase"
             }}>
               {title}
@@ -771,7 +891,7 @@ function DashPage() {
             }}>
               {/* KPI 값 */}
               <h2 style={{
-                fontSize: "24px",    // 🔹 숫자 크기 줄임
+                fontSize: "24px",
                 fontWeight: "bold",
                 color: "#222",
               }}>
@@ -781,10 +901,10 @@ function DashPage() {
               {/* 증감률 표시 (연간 매출 제외) */}
               {diff !== null && (
                 <p style={{
-                  fontSize: "12px", // 🔹 증감률 폰트 크기 조정
+                  fontSize: "12px",
                   fontWeight: "bold",
                   color: diff >= 0 ? "#dc3545" : "#007bff",
-                  marginLeft: "10px" // 🔹 오른쪽 정렬을 위해 여백 추가
+                  marginLeft: "10px"
                 }}>
                   {diff >= 0 ? `+${diff.toFixed(2)}% ↑` : `${diff.toFixed(2)}% ↓`}
                 </p>
@@ -797,7 +917,7 @@ function DashPage() {
       {/* (급상승 품목 슬라이드) */}
       <div style={KPI_ALL_STYLE}>
         <h2 style={TITLE_STYLE}>
-          매출 급상승 품목
+          최근 3개월 최다 매출 상품
           <svg
             style={{
               width: "24px",
@@ -807,83 +927,19 @@ function DashPage() {
             }}
             viewBox="0 0 24 24"
             fill="none"
-            stroke="#FF6B6B"
+            stroke="#333"
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            <path d="M23 6L13.5 15.5L8.5 10.5L1 18" />
-            <polyline points="17 6 23 6 23 12" />
+            <path d="M12 20V10" />
+            <path d="M18 14l-6-6-6 6" />
           </svg>
         </h2>
-
-        <div style={{
-          display: "flex",
-          flexDirection: "row",
-          overflow: "hidden",
-          width: "1350px",
-          margin: "auto",
-          justifyContent: "center",
-          position: "relative",
-          padding: "20px 0",
-          background: "linear-gradient(to right, rgba(244, 246, 248, 0.6), rgba(244, 246, 248, 0.4))",
-          borderRadius: "25px",
-          boxShadow: "inset 0 0 15px rgba(244, 246, 248, 0.8)",
-          border: "1px solid rgba(244, 246, 248, 0.8)"
-        }}>
-          <div style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            width: "100px",
-            height: "100%",
-            background: "linear-gradient(to right, rgba(255,255,255,1), rgba(255,255,255,0))",
-            zIndex: 1
-          }} />
-          <div style={{
-            position: "absolute",
-            right: 0,
-            top: 0,
-            width: "100px",
-            height: "100%",
-            background: "linear-gradient(to left, rgba(255,255,255,1), rgba(255,255,255,0))",
-            zIndex: 1
-          }} />
-
-          {rising.subcat_list.length > 0 ? (
-            <div style={{
-              display: "flex",
-              animation: `slide 30s linear infinite`,
-              whiteSpace: "nowrap"
-            }}>
-              {[...rising.subcat_list, ...rising.subcat_list, ...rising.subcat_list].map((subcat, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    ...itemStyle,
-                    margin: "5px 10px"
-                  }}
-                >
-                  {subcat}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p style={{ textAlign: "center", fontSize: "16px", color: "#666" }}>급상승 품목 없음</p>
-          )}
-
-          <style>
-            {rising.subcat_list.length > 0 ? `
-              @keyframes slide {
-                0% {
-                  transform: translateX(0);
-                }
-                100% {
-                  transform: translateX(calc(-225px * ${rising.subcat_list.length}));
-                }
-              }
-            ` : ""}
-          </style>
+        <div style={TOP_SALES_CONTAINER_STYLE}>
+          {topSalesItems.map((item, index) => (
+            <TopSalesItem key={index} item={item} />
+          ))}
         </div>
       </div>
       {/*
@@ -1090,17 +1146,17 @@ function DashPage() {
       {/* Best Top 3 & Worst Top 3 중앙 정렬 */}
       <div style={{
         display: "flex",
-        justifyContent: "center",  // 🔹 가로 정렬을 중앙으로 변경
+        justifyContent: "center",
         alignItems: "center",
-        gap: "40px",               // 🔹 두 블록 사이 여백 추가
+        gap: "40px",
         marginTop: "20px"
       }}>
         {/* Best Top 3 */}
         <div style={{
           ...SECTION_STYLE,
-          flex: 1,                  // 🔹 양쪽 블록 크기 균등 배치
+          flex: 1,
           maxWidth: "500px",
-          height: "400px",          // 🔹 **배경 블록 크기를 동일하게 조정**
+          height: "400px",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -1109,7 +1165,7 @@ function DashPage() {
           <h2 style={TITLE_STYLE}>매출 Best Top 3 🏆</h2>
           <div style={{
             display: "flex",
-            justifyContent: "center", // 🔹 내부 아이템 중앙 정렬
+            justifyContent: "center",
             alignItems: "flex-end",
             gap: "20px"
           }}>
@@ -1152,9 +1208,9 @@ function DashPage() {
         {/* Worst Top 3 */}
         <div style={{
           ...SECTION_STYLE,
-          flex: 1,                  // 🔹 양쪽 블록 크기 균등 배치
+          flex: 1,
           maxWidth: "500px",
-          height: "400px",          // 🔹 **배경 블록 크기를 동일하게 조정**
+          height: "400px",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -1163,7 +1219,7 @@ function DashPage() {
           <h2 style={TITLE_STYLE}>매출 Worst Top 3 😭</h2>
           <div style={{
             display: "flex",
-            justifyContent: "center", // 🔹 내부 아이템 중앙 정렬
+            justifyContent: "center",
             alignItems: "flex-end",
             gap: "20px"
           }}>

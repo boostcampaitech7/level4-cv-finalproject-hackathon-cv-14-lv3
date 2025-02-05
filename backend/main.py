@@ -567,6 +567,51 @@ async def chat_with_trend(message: dict):
             "error": f"서버 오류가 발생했습니다: {str(e)}"
         }
 
+@app.get("/api/top-sales-items")
+def get_top_sales_items():
+    try:
+        # 전역 변수로 이미 로드된 df_sales 사용
+        global df_sales
+        
+        # date 컬럼을 datetime으로 변환
+        df_sales['date'] = pd.to_datetime(df_sales['date'])
+        
+        # 최근 3개월 데이터 필터링
+        latest_date = df_sales['date'].max()
+        three_months_ago = latest_date - pd.DateOffset(months=3)
+        recent_data = df_sales[df_sales['date'] >= three_months_ago]
+        
+        # ID별 총 매출액 계산 및 상위 5개 선택
+        total_sales_by_id = recent_data.groupby(['id', '소분류'])['매출액'].sum().reset_index()
+        top_5 = total_sales_by_id.nlargest(5, '매출액')
+        
+        # 최근 2일 날짜 구하기
+        prev_date = df_sales[df_sales['date'] < latest_date]['date'].max()
+        
+        result = []
+        for _, row in top_5.iterrows():
+            item_id = row['id']
+            item_data = df_sales[df_sales['id'] == item_id]
+            
+            # 최근 2일 매출액
+            latest_sales = item_data[item_data['date'] == latest_date]['매출액'].sum()
+            prev_sales = item_data[item_data['date'] == prev_date]['매출액'].sum()
+            
+            # 증감률 계산
+            change_rate = ((latest_sales - prev_sales) / prev_sales * 100) if prev_sales != 0 else 0
+            
+            result.append({
+                "id": item_id,
+                "name": row['소분류'] if pd.notna(row['소분류']) else f"Product {item_id}",
+                "sales": float(latest_sales),
+                "change_rate": float(change_rate)
+            })
+            
+        return result if result else []
+    except Exception as e:
+        print(f"Error in get_top_sales_items: {str(e)}")
+        return []
+
 # main
 if __name__ == "__main__":
     import uvicorn
