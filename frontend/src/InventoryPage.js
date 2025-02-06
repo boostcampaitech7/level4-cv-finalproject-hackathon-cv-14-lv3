@@ -74,8 +74,8 @@ const InventoryPage = () => {
   const handleMainCategoryChange = async (e) => {
     const value = e.target.value;
     setSelectedMain(value);  // 선택한 값 유지
-    setSelectedSub1("전체 중분류"); 
-    setSelectedSub2("전체 소분류"); 
+    setSelectedSub1("전체 중분류"); // 하위 카테고리 초기화
+    setSelectedSub2("전체 소분류"); // 하위 카테고리 초기화
   
     const filters = await fetchCategoryFilters(value === "전체 대분류" ? "All" : value, "All", "All");
     setSub1Categories(["전체 중분류", ...(filters.sub1 || [])]);
@@ -88,7 +88,7 @@ const InventoryPage = () => {
   const handleSub1CategoryChange = async (e) => {
     const value = e.target.value;
     setSelectedSub1(value); 
-    setSelectedSub2("전체 소분류");
+    setSelectedSub2("전체 소분류"); // 하위 카테고리 초기화
   
     const filters = await fetchCategoryFilters(
       selectedMain === "전체 대분류" ? "All" : selectedMain,
@@ -112,9 +112,10 @@ const InventoryPage = () => {
       setSub1Categories(["전체 중분류", ...(categoryData.sub1 || [])]);
       setSub2Categories(["전체 소분류", ...(categoryData.sub2 || [])]);
   
-      await fetchAutoOrders();
       const reorderData = await fetchReorderPoints();
-      await fetchInventory(reorderData, "All", "All", "All");
+      if (Object.keys(reorderData).length > 0) {
+        await fetchInventory(reorderData);
+      }
     };
     initializeData();
   }, []);
@@ -123,18 +124,21 @@ const InventoryPage = () => {
 
   
   
-  // ✅ 최소 재고 기준(ROP) 데이터 가져오기
+  // ✅ 날짜 형식 변환 함수 추가
+  const convertDateFormat = (dateStr) => {
+    // "2022-02" → "22_m02"
+    const [year, month] = dateStr.split('-');
+    return `${year.slice(2)}_m${month}`;
+  };
+
+  // ✅ fetchReorderPoints 함수 수정
   const fetchReorderPoints = async () => {
     try {
-
-      // ✅ "2022-01" → "22_m01" 변환
-      const start = startMonth.slice(2, 4) + "_m" + startMonth.slice(5, 7);
-      const end = endMonth.slice(2, 4) + "_m" + endMonth.slice(5, 7);
-
+      const start = convertDateFormat(startMonth);
+      const end = convertDateFormat(endMonth);
 
       const response = await fetch(`http://127.0.0.1:8000/api/reorder_points?start=${start}&end=${end}`);
       const data = await response.json();
-
 
       if (data.error) {
         setErrorMessage(data.error);
@@ -147,7 +151,7 @@ const InventoryPage = () => {
           reorderMap[item.id] = {
             reorder_point: item.reorder_point || 10,
             daily_avg_sales: item.daily_avg_sales || 0,
-            monthly_avg_sales: item.monthly_avg_sales || 0,  // ✅ 추가된 데이터
+            monthly_avg_sales: item.monthly_avg_sales || 0,
           };
         }
       });
@@ -158,7 +162,7 @@ const InventoryPage = () => {
       console.error("❌ Error fetching reorder points:", error);
       return {};
     }
-};
+  };
 
 
 
@@ -217,18 +221,33 @@ useEffect(() => {
 
 
 const handleResetSort = async () => {
-  setKeepLowStockTop(true);
-  setSortField(null);
+  // 카테고리 필터 초기화
+  setSelectedMain("전체 대분류");
+  setSelectedSub1("전체 중분류");
+  setSelectedSub2("전체 소분류");
+  
+  // 카테고리 목록 다시 가져오기
+  const categoryData = await fetchCategoryFilters("All", "All", "All");
+  setMainCategories(["전체 대분류", ...(categoryData.main || [])]);
+  setSub1Categories(["전체 중분류", ...(categoryData.sub1 || [])]);
+  setSub2Categories(["전체 소분류", ...(categoryData.sub2 || [])]);
+
+  // 정렬 초기화
+  setSortField("");
   setSortOrder("asc");
-
-  // ✅ 필터 초기화 (드롭다운에는 '전체' 표시, API에는 빈 값 전달)
-  setSelectedMain("All");
-  setSelectedSub1("All");
-  setSelectedSub2("All");
+  
+  // 검색 초기화
   setSearchQuery("");
+  const searchInput = document.querySelector('.search-bar input');
+  if (searchInput) {
+    searchInput.value = '';
+  }
 
-  await fetchCategoryFilters("", "", "");
-  await fetchInventory();
+  // 데이터 다시 가져오기
+  const reorderData = await fetchReorderPoints();
+  if (Object.keys(reorderData).length > 0) {
+    await fetchInventory(reorderData);
+  }
 };
 
 
@@ -344,20 +363,22 @@ const handleResetSort = async () => {
   
 
 
-  // ✅ 월 선택 핸들러
-  const handleStartMonthChange = (e) => {
+  // ✅ 월 선택 핸들러 - 상태 업데이트 및 데이터 즉시 갱신
+  const handleStartMonthChange = async (e) => {
     setStartMonth(e.target.value);
+    const reorderData = await fetchReorderPoints();
+    if (Object.keys(reorderData).length > 0) {
+      await fetchInventory(reorderData);
+    }
   };
 
-  const handleEndMonthChange = (e) => {
+  const handleEndMonthChange = async (e) => {
     setEndMonth(e.target.value);
+    const reorderData = await fetchReorderPoints();
+    if (Object.keys(reorderData).length > 0) {
+      await fetchInventory(reorderData);
+    }
   };
-  
-  // ✅ 버튼 클릭 시 인벤토리 업데이트
-  const handleDateChange = async () => {
-    await fetchInventory(reorderPoints);
-  };
-
 
   //검색 필터링
   const handleSearch = (e) => {
@@ -415,7 +436,7 @@ const handleResetSort = async () => {
   };
 
   return (
-    <div>
+    <div className="inventory-container">
       <h2>📦 재고 관리</h2>
       
       {/* ✅ 월 선택 UI 추가 */}
@@ -442,63 +463,75 @@ const handleResetSort = async () => {
       {errorMessage && <p className="error-message">{errorMessage}</p>}
 
       <div className="controls">
-        <input
-          type="text"
-          placeholder="🔍 상품명 검색"
-          value={searchQuery}
-          onChange={handleSearch}
-        />
+        <div className="search-bar">
+          <input
+            type="text"
+            placeholder="🔍 상품명 검색"
+            value={searchQuery}
+            onChange={handleSearch}
+          />
+        </div>
         
         <div className="category-filters">
-        {/* ✅ 대분류 드롭다운 */}
-        <select value={selectedMain} onChange={handleMainCategoryChange}>
-          {mainCategories.map((cat) => (
-            <option key={cat} value={cat}>
-              {cat === "전체 대분류" ? "대분류" : cat}
-            </option>
-          ))}
-        </select>
+          {/* 대분류 드롭다운 */}
+          <div className="category-select">
+            <select 
+              value={selectedMain} 
+              onChange={handleMainCategoryChange}
+            >
+              <option value="전체 대분류">{selectedMain === "전체 대분류" ? "대분류" : selectedMain}</option>
+              {mainCategories.filter(cat => cat !== "전체 대분류").map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        {/* ✅ 중분류 드롭다운 */}
-        <select value={selectedSub1} onChange={handleSub1CategoryChange}>
-          {sub1Categories.map((cat) => (
-            <option key={cat} value={cat}>
-              {cat === "전체 중분류" ? "중분류" : cat}
-            </option>
-          ))}
-        </select>
+          {/* 중분류 드롭다운 */}
+          <div className="category-select">
+            <select 
+              value={selectedSub1} 
+              onChange={handleSub1CategoryChange}
+            >
+              <option value="전체 중분류">{selectedSub1 === "전체 중분류" ? "중분류" : selectedSub1}</option>
+              {sub1Categories.filter(cat => cat !== "전체 중분류").map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        {/* ✅ 소분류 드롭다운 */}
-        <select value={selectedSub2} onChange={handleSub2CategoryChange}>
-          {sub2Categories.map((cat) => (
-            <option key={cat} value={cat}>
-              {cat === "전체 소분류" ? "소분류" : cat}
-            </option>
-          ))}
-        </select>
-      </div>
+          {/* 소분류 드롭다운 */}
+          <div className="category-select">
+            <select 
+              value={selectedSub2} 
+              onChange={handleSub2CategoryChange}
+            >
+              <option value="전체 소분류">{selectedSub2 === "전체 소분류" ? "소분류" : selectedSub2}</option>
+              {sub2Categories.filter(cat => cat !== "전체 소분류").map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
 
-      {/* ✅ 선택한 값 텍스트로 표시 */}
-      <div className="selected-category">
-        <p>📌 선택된 카테고리: <strong>{selectedMain} > {selectedSub1} > {selectedSub2}</strong></p>
-      </div>
-
-
-
-
-      <button onClick={() => handleSort("value")}>
-        {sortField === "value" && sortOrder === "desc" ? "📈 재고 오름차순" : "📉 재고 내림차순"}
-      </button>
-      <button onClick={() => handleSort("monthly_avg_sales")}>
-        {sortField === "monthly_avg_sales" && sortOrder === "asc" ? "📉 월 평균 판매량 내림차순" : "📈 월 평균 판매량 오름차순"}
-      </button>
-      <button onClick={() => handleSort("daily_avg_sales")}>
-        {sortField === "daily_avg_sales" && sortOrder === "asc" ? "📉 일 평균 판매량 내림차순" : "📈 일 평균 판매량 오름차순"}
-      </button>
-
-      <button onClick={handleResetSort}>🔄 새로고침 (초기화)</button>
-
-        <button onClick={downloadCSV}>📥 CSV 다운로드</button>
+        <div className="button-group">
+          <button className="sort-button" onClick={() => handleSort("value")}>
+            {sortField === "value" && sortOrder === "desc" ? "📈 재고 오름차순" : "📉 재고 내림차순"}
+          </button>
+          <button className="sort-button" onClick={() => handleSort("monthly_avg_sales")}>
+            {sortField === "monthly_avg_sales" && sortOrder === "asc" ? "📉 월 평균 판매량 내림차순" : "📈 월 평균 판매량 오름차순"}
+          </button>
+          <button className="sort-button" onClick={() => handleSort("daily_avg_sales")}>
+            {sortField === "daily_avg_sales" && sortOrder === "asc" ? "📉 일 평균 판매량 내림차순" : "📈 일 평균 판매량 오름차순"}
+          </button>
+          <button className="reset-button" onClick={handleResetSort}>🔄 새로고침</button>
+          <button className="download-button" onClick={downloadCSV}>📥 CSV 다운로드</button>
+        </div>
       </div>
       
       <table className="inventory-table">
@@ -514,8 +547,14 @@ const handleResetSort = async () => {
           </tr>
         </thead>
         <tbody>
-        {filteredInventory.map((item, index) => (
-          <tr key={index} className={item.isLowStock ? "low-stock" : ""}>
+        {filteredInventory.map((item) => (
+          <tr 
+            key={item.id} 
+            className={item.isLowStock ? "low-stock" : ""}
+            style={{ 
+              backgroundColor: item.isLowStock ? '#fff3f3' : 'inherit'
+            }}
+          >
             <td>{item.sub3}</td>
             <td>{item.monthly_avg_sales.toFixed(1)}</td>
             <td>{item.daily_avg_sales.toFixed(1)}</td>  
@@ -536,52 +575,185 @@ const handleResetSort = async () => {
                 ? "✅ 주문 완료" 
                 : item.isLowStock ? "❌ 미주문" : "-"}
             </td>
-
           </tr>
         ))}
-      </tbody>
+        </tbody>
       </table>
 
       <style>
         {`
-          .description {
-            color: gray;
-            font-size: 14px;
+          .inventory-container {
+            padding: 0 24px;  /* 좌우 여백 추가 */
           }
+
+          .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;  /* 컨트롤 요소들 사이 간격 증가 */
+            margin: 24px 0;
+          }
+
+          .search-bar input {
+            width: 300px;
+            padding: 12px 16px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            background-color: white;
+          }
+
+          .search-bar input:focus {
+            outline: none;
+            border-color: #4a90e2;
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+          }
+
+          .category-filters {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+          }
+
+          .category-select {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+
+          .category-select label {
+            font-weight: 500;
+            color: #666;
+          }
+
+          .category-select select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            min-width: 160px;
+            background-color: white;
+            cursor: pointer;
+          }
+
+          .category-select select:hover {
+            border-color: #999;
+          }
+
+          .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;  /* 버튼 간격 증가 */
+          }
+
+          .button-group button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+          }
+
+          .sort-button {
+            background: linear-gradient(to bottom, #ffffff, #f8f9fa);
+            color: #495057;
+            border: 1px solid #e9ecef;
+          }
+
+          .sort-button:hover {
+            background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.08);
+          }
+
+          .reset-button {
+            background: linear-gradient(to bottom, #f1f3f5, #e9ecef);
+            color: #495057;
+            border: 1px solid #dee2e6;
+          }
+
+          .reset-button:hover {
+            background: linear-gradient(to bottom, #e9ecef, #dee2e6);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.08);
+          }
+
+          .download-button {
+            background: linear-gradient(to bottom, #4a90e2, #357abd);
+            color: white;
+            border: 1px solid #357abd;
+          }
+
+          .download-button:hover {
+            background: linear-gradient(to bottom, #357abd, #2b6298);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(74, 144, 226, 0.2);
+          }
+
+          .button-group button:active {
+            transform: translateY(1px);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+          }
+
+          .date-selection {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin: 24px 0;
+          }
+
+          .date-selection input {
+            padding: 10px 14px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            background-color: white;
+          }
+
+          .date-selection input:focus {
+            outline: none;
+            border-color: #4a90e2;
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+          }
+
           .inventory-table {
             width: 100%;
             border-collapse: collapse;
+            margin-top: 20px;
           }
-          .inventory-table th, .inventory-table td {
+
+          .inventory-table th,
+          .inventory-table td {
             border: 1px solid #ddd;
             padding: 8px;
             text-align: left;
           }
+
+          .inventory-table th {
+            background-color: #f4f4f4;
+          }
+
+          .inventory-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+          }
+
+          .inventory-table tr:hover {
+            background-color: #f5f5f5;
+          }
+
           .low-stock {
-            background-color: #ffebee; /* 연한 빨간색 배경 */
+            background-color: #fff3f3 !important;
           }
+
           .low-stock-text {
-            color: red;
-            font-weight: bold;
+            color: #dc3545;
           }
+
           .order-success {
-            color: green;
-            font-weight: bold;
-          }
-          .date-selection {
-            margin-bottom: 10px;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-          }
-          .error-message {
-            color: red;
-            font-weight: bold;
-          }
-          .category-filters {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
+            color: #28a745;
           }
         `}
       </style>
