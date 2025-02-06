@@ -18,7 +18,7 @@ client = OpenAI(
     base_url="https://api.upstage.ai/v1/solar"
 )
 
-WEBSHOP_URL = "http://172.29.50.176:3000/"
+WEBSHOP_URL = "https://hen-fitting-trout.ngrok-free.app/"
 ACTION_TO_TEMPLATE = {
     'Description': 'description_page.html',
     'Features': 'features_page.html',
@@ -49,7 +49,7 @@ def llm(prompt, stop=["\n"]):
             cur_try += 1
         return ""
     except Exception as e:
-        print(e)
+        # print(f"Buy 0 Fail: {e}")
         # import sys
         # sys.exit(1)
         return ""
@@ -260,7 +260,7 @@ i am looking for {item}.
         action = llm(init_prompt + prompt[-(6400-len(init_prompt)):], stop=['\n']).lstrip(' ')
         # print("-------------------------------------------------------------------------")
         if i == 14 and res[2] == False:
-            print(f"{idx} Fail")
+            print(f"Buy {idx} Fail: Attempt count exceeded")
 
     return env_history, False, 0.0
 
@@ -282,7 +282,6 @@ def run_trial(
         item_list = item_string.split(',')
 
     for z, env_config in enumerate(env_configs):
-        z+=50
         if env_config["is_success"]:
             num_successes += 1
             # log to world log
@@ -300,7 +299,7 @@ def run_trial(
             sum_reward += reward
             if is_success:
                 status_str: str = f'Environment #{z} Trial #{trial_idx}: SUCCESS'
-                env_configs[z-50]["is_success"] = True
+                env_configs[z]["is_success"] = True
                 num_successes += 1
                 num_additional_successes += 1
             else:
