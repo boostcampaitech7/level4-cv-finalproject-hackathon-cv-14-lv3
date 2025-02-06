@@ -84,7 +84,7 @@ def load_sales_data():
         # 절대 경로 사용
         db_path = os.path.join(os.path.dirname(__file__), "../database/database.db")
         conn = sqlite3.connect(db_path)
-        
+
         # id를 정수로 가져오도록 쿼리 수정
         df = pd.read_sql_query("SELECT CAST(id AS INTEGER) as id, date, value FROM daily_sales_data", conn)
         conn.close()
@@ -109,14 +109,14 @@ def load_quantity_data():
         # 절대 경로 사용
         db_path = os.path.join(os.path.dirname(__file__), "../database/database.db")
         conn = sqlite3.connect(db_path)
-        
+
         # id를 정수로 가져오도록 쿼리 수정
         df = pd.read_sql_query("SELECT CAST(id AS INTEGER) as id, date, value FROM daily_data", conn)
         conn.close()
-        
+
         # 열 이름을 소문자로 변환
         df.columns = df.columns.str.lower()
-        
+
         if "date" in df.columns:
             df["date"] = pd.to_datetime(df["date"], errors="coerce")
         return df
@@ -157,11 +157,11 @@ if '소분류' not in df_sales.columns or '대분류' not in df_sales.columns:
     df_product_info = pd.DataFrame(product_info_response.data)
     # 필요한 컬럼명을 변경합니다.
     df_product_info = df_product_info.rename(columns={"sub1": "대분류", "sub3": "소분류"})
-    
+
     # id 컬럼을 문자열로 변환
     df_sales['id'] = df_sales['id'].astype(str)
     df_product_info['id'] = df_product_info['id'].astype(str)
-    
+
     # df_sales에 product_info를 id를 기준으로 병합 (left join)
     df_sales = df_sales.merge(df_product_info[["id", "대분류", "소분류"]], on="id", how="left")
 
@@ -324,41 +324,38 @@ def get_rising_subcategories():
         "subcat_list": list(subcat_list)  # 넘파이 Index -> list
     }
 
-# (추가) 상·하위 10개 품목
+# (수정) 판매수량 상위 10개 품목 반환 엔드포인트
 @app.get("/api/topbottom")
 def get_topbottom():
-    if last_month_col:
-        # Supabase에서 product_info 데이터 가져오기
-        response = supabase.table('product_info').select("id", "sub3").execute()
-        product_info = pd.DataFrame(response.data)
+    try:
+        # df_quantity는 이미 전역 변수로 로드되어 있음 (컬럼: id, date, 판매수량)
+        # 전체 판매수량을 제품별로 집계
+        sales_qty_total = df_quantity.groupby('id', as_index=False)['판매수량'].sum()
 
-        # ID 컬럼을 문자열로 변환
+        # 판매수량 상위 10개 품목 선택
+        top_10_df = sales_qty_total.nlargest(10, '판매수량').copy()
+        top_10_df['id'] = top_10_df['id'].astype(str)
+        top_10_df = top_10_df.rename(columns={'id': 'ID', '판매수량': '총판매수량'})
+
+        # Supabase에서 product_info 데이터 (예: 제품명 또는 sub3 정보를 가져옴)
+        response = supabase.table('product_info').select("id, sub3").execute()
+        product_info = pd.DataFrame(response.data)
         product_info['id'] = product_info['id'].astype(str)
         product_info = product_info.rename(columns={'id': 'ID', 'sub3': 'Sub3'})
 
-        # top 10
-        top_10_df = result.nlargest(10, last_month_col, keep='all').copy()
-        top_10_df = top_10_df.rename(columns={'id': 'ID'})
-        top_10_df['ID'] = top_10_df['ID'].astype(str)
+        # 집계 데이터와 product_info를 병합 (제품명 등 추가 정보 포함)
         top_10_df = pd.merge(top_10_df, product_info, on='ID', how='left')
-        top_10_list = top_10_df.to_dict('records')  # DataFrame을 리스트로 변환
 
-        # bottom 10
-        non_zero_values = result[result[last_month_col] != 0]
-        bottom_10_df = non_zero_values.nsmallest(10, last_month_col).copy()
-        bottom_10_df = bottom_10_df.rename(columns={'id': 'ID'})
-        bottom_10_df['ID'] = bottom_10_df['ID'].astype(str)
-        bottom_10_df = pd.merge(bottom_10_df, product_info, on='ID', how='left')
-        bottom_10_list = bottom_10_df.to_dict('records')  # DataFrame을 리스트로 변환
-    else:
-        top_10_list = []
-        bottom_10_list = []
-
-    return {
-        "top_10": top_10_list,
-        "bottom_10": bottom_10_list,
-        "last_month_col": last_month_col
-    }
+        top_10_list = top_10_df.to_dict('records')
+        return {
+            "top_10": top_10_list
+        }
+    except Exception as e:
+        print(f"Error in get_topbottom: {str(e)}")
+        return {
+            "top_10": [],
+            "error": str(e)
+        }
 
 # 챗봇용 데이터 미리 준비
 def prepare_chat_data():
@@ -566,6 +563,76 @@ async def chat_with_trend(message: dict):
             "status": "error",
             "error": f"서버 오류가 발생했습니다: {str(e)}"
         }
+
+@app.get("/api/top-sales-items")
+def get_top_sales_items():
+    try:
+        # 전역 변수로 이미 로드된 df_sales 사용
+        global df_sales
+
+        # date 컬럼을 datetime으로 변환
+        df_sales['date'] = pd.to_datetime(df_sales['date'])
+
+        # 최근 3개월 데이터 필터링
+        latest_date = df_sales['date'].max()
+        three_months_ago = latest_date - pd.DateOffset(months=3)
+        recent_data = df_sales[df_sales['date'] >= three_months_ago]
+
+        # ID별 총 매출액 계산 및 상위 5개 선택
+        total_sales_by_id = recent_data.groupby(['id', '소분류'])['매출액'].sum().reset_index()
+        top_5 = total_sales_by_id.nlargest(5, '매출액')
+
+        # 최근 2일 날짜 구하기
+        prev_date = df_sales[df_sales['date'] < latest_date]['date'].max()
+
+        result = []
+        for _, row in top_5.iterrows():
+            item_id = row['id']
+            item_data = df_sales[df_sales['id'] == item_id]
+
+            # 최근 2일 매출액
+            latest_sales = item_data[item_data['date'] == latest_date]['매출액'].sum()
+            prev_sales = item_data[item_data['date'] == prev_date]['매출액'].sum()
+
+            # 증감률 계산
+            change_rate = ((latest_sales - prev_sales) / prev_sales * 100) if prev_sales != 0 else 0
+
+            result.append({
+                "id": item_id,
+                "name": row['소분류'] if pd.notna(row['소분류']) else f"Product {item_id}",
+                "sales": float(latest_sales),
+                "change_rate": float(change_rate)
+            })
+
+        return result if result else []
+    except Exception as e:
+        print(f"Error in get_top_sales_items: {str(e)}")
+        return []
+
+@app.get("/api/daily-top-sales")
+def get_daily_top_sales():
+    try:
+        # 이미 병합된 df_sales 사용 (대분류, 소분류 정보 포함)
+        latest_date = df_sales['date'].max()
+        latest_sales = df_sales[df_sales['date'] == latest_date].copy()
+        
+        # 제품별 매출액 합계 계산 및 상위 7개 선택
+        daily_top_7 = latest_sales.groupby(['id', '대분류', '소분류'], as_index=False)['매출액'].sum()
+        daily_top_7 = daily_top_7.nlargest(7, '매출액')
+        
+        # 결과 포맷팅
+        result = [{
+            'id': str(row['id']),
+            'category': row['대분류'],  # 대분류
+            'subcategory': row['소분류'],  # 소분류
+            'sales': float(row['매출액']),
+            'date': latest_date
+        } for _, row in daily_top_7.iterrows()]
+        
+        return result
+    except Exception as e:
+        print(f"Error in get_daily_top_sales: {str(e)}")
+        return []
         
 
 @app.get("/api/inventory")
