@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef, useMemo, Suspense, lazy } from 'react';
 import axios from 'axios';
 import Plot from 'react-plotly.js';
+import { FaTrophy, FaMedal } from 'react-icons/fa';
+import { IoMdMedal } from 'react-icons/io';
 
 ////////////////////////////////////////
 // 1) 스타일 상수
@@ -715,7 +717,9 @@ function DashPage() {
     width: "95%",
     maxWidth: "2100px",
     margin: "20px auto",
-    gap: "20px"
+    gap: "20px",
+    padding: "0",  // 패딩 제거
+    boxSizing: "border-box"
   };
 
   // 거래 카드 공통 스타일
@@ -750,6 +754,36 @@ function DashPage() {
       status === "pending" ? "#f57c00" : "#d32f2f",
     marginRight: "10px"
   });
+
+  // 순위 아이콘 컴포넌트
+  const RankIcon = ({ rank }) => {
+    const iconStyle = {
+      position: 'absolute',
+      left: '20px',
+      fontSize: '26px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    };
+
+    const rankColors = {
+      0: { color: '#FFD700', shadow: '0 0 10px rgba(255, 215, 0, 0.3)' },  // 금
+      1: { color: '#C0C0C0', shadow: '0 0 10px rgba(192, 192, 192, 0.3)' }, // 은
+      2: { color: '#CD7F32', shadow: '0 0 10px rgba(205, 127, 50, 0.3)' }   // 동
+    };
+
+    if (rank > 2) return null;
+
+    return (
+      <div style={{
+        ...iconStyle,
+        color: rankColors[rank].color,
+        filter: `drop-shadow(${rankColors[rank].shadow})`
+      }}>
+        <FaMedal />
+      </div>
+    );
+  };
 
   return (
     <div style={PAGE_STYLE}>
@@ -977,21 +1011,15 @@ function DashPage() {
       </div>
 
       {/* 최하단 섹션 */}
-      <div style={{
-        display: 'flex',
-        width: '95%',
-        maxWidth: '2100px',
-        margin: '20px auto',
-        gap: '20px'
-      }}>
-        {/* 왼쪽: 일간 최다 매출 (상위 7개) */}
+      <div style={TRANSACTIONS_CONTAINER_STYLE}>
+        {/* 왼쪽: 일간 최다 매출 */}
         <div style={{
-          flex: '0 0 60%',
+          flex: '0 0 calc(70% - 10px)',  // 70%에서 gap의 절반만큼 빼줌
           backgroundColor: 'white',
           borderRadius: '16px',
-          padding: '30px',
+          padding: '20px',
           boxShadow: '0 8px 32px rgba(0,0,0,0.06)',
-          minHeight: '600px'
+          minHeight: '520px'
         }}>
           <h2 style={{ 
             fontSize: '22px', 
@@ -1082,30 +1110,86 @@ function DashPage() {
 
         {/* 오른쪽: 판매수량 순위표 */}
         <div style={{
-          flex: '0 0 40%',  // 40% 너비 고정
+          flex: '0 0 calc(30% - 10px)',  // 30%에서 gap의 절반만큼 빼줌
           backgroundColor: 'white',
           borderRadius: '16px',
-          padding: '25px',
-          boxShadow: '0 8px 16px rgba(0,0,0,0.08)',
-          minHeight: '600px',
+          padding: '20px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.06)',
+          minHeight: showAllItems ? '700px' : '520px',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between'
         }}>
           <div>
-            <h2 style={{ fontSize: '18px', marginBottom: '20px' }}>판매수량 상위 품목</h2>
+            <h2 style={{ 
+              fontSize: '22px', 
+              marginBottom: '30px',
+              color: '#2c3e50',
+              fontWeight: '600',
+              letterSpacing: '0.3px'
+            }}>판매수량 상위 품목</h2>
             <div>
               {top10.slice(0, showAllItems ? 10 : 5).map((item, index) => (
                 <div key={index} style={{
                   display: 'flex',
                   alignItems: 'center',
-                  padding: '15px',
-                  borderBottom: '1px solid #eee'
+                  padding: '20px 25px 20px 60px',  // 패딩 약간 감소
+                  marginBottom: '12px',  // 마진 약간 감소
+                  borderRadius: '12px',
+                  background: index < 3 
+                    ? 'linear-gradient(145deg, #ffffff, #fafbfc)'
+                    : 'white',
+                  boxShadow: index < 3 
+                    ? '0 4px 15px rgba(0,0,0,0.06)'
+                    : '0 2px 8px rgba(0,0,0,0.03)',
+                  transition: 'all 0.2s ease',
+                  position: 'relative',
+                  ':hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 6px 20px rgba(0,0,0,0.05)'
+                  }
                 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: '500' }}>{item.Sub3}</div>
-                    <div style={{ color: '#666', fontSize: '14px' }}>
-                      총 판매수량: {item.총판매수량}개
+                  <RankIcon rank={index} />
+                  
+                  <div style={{ 
+                    position: 'absolute',
+                    top: '15px',
+                    left: index < 3 ? '50px' : '25px',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    color: index < 3 ? '#2c3e50' : '#6c757d',
+                    letterSpacing: '1px',
+                    textTransform: 'uppercase'
+                  }}>
+                    {index === 0 ? '1st' : 
+                     index === 1 ? '2nd' : 
+                     index === 2 ? '3rd' : 
+                     `${index + 1}th`}
+                  </div>
+                  
+                  <div style={{ 
+                    flex: 1,
+                    marginTop: '20px'
+                  }}>
+                    <div style={{ 
+                      fontWeight: '600',
+                      fontSize: index < 3 ? '18px' : '16px',
+                      color: '#2c3e50',
+                      marginBottom: '8px',
+                      letterSpacing: '0.3px'
+                    }}>{item.Sub3}</div>
+                    <div style={{ 
+                      color: '#505764',
+                      fontSize: '15px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}>
+                      <span>총 판매수량:</span>
+                      <span style={{
+                        fontWeight: '600',
+                        color: index < 3 ? '#2196f3' : '#2c3e50'
+                      }}>{item.총판매수량.toLocaleString()}개</span>
                     </div>
                   </div>
                 </div>
@@ -1113,19 +1197,31 @@ function DashPage() {
             </div>
           </div>
           
-          {/* View All Items 버튼 */}
+          {/* 더보기 버튼 */}
           <div 
             onClick={() => setShowAllItems(!showAllItems)}
             style={{
               textAlign: 'center',
-              color: '#2196f3',
-              padding: '10px',
+              margin: '15px auto 0',
+              padding: '10px 25px',
               cursor: 'pointer',
-              borderTop: '1px solid #eee',
-              marginTop: '20px'
+              borderRadius: '25px',
+              fontSize: '14px',
+              fontWeight: '500',
+              transition: 'all 0.2s ease',
+              background: 'linear-gradient(145deg, #f8f9fa, #ffffff)',
+              border: '1px solid #e9ecef',
+              color: '#2c3e50',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+              width: '90%',  // 버튼 너비 증가
+              ':hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                background: 'linear-gradient(145deg, #ffffff, #f8f9fa)'
+              }
             }}
           >
-            {showAllItems ? 'Show Less' : 'View All Items'}
+            {showAllItems ? '접기' : '더보기'}
           </div>
         </div>
       </div>
