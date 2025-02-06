@@ -412,6 +412,12 @@ function DashPage() {
 
   const API_BASE = "http://localhost:8000";
 
+  // 새로운 상태 추가
+  const [dailyTopSales, setDailyTopSales] = useState([]);
+
+  // 상태 추가
+  const [showAllItems, setShowAllItems] = useState(false);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -437,13 +443,20 @@ function DashPage() {
         const risingRes = await axios.get(`${API_BASE}/api/rising-subcategories`);
         setRising(risingRes.data);
 
-        const topBottomRes = await axios.get(`${API_BASE}/api/topbottom`);
-        // top10는 판매수량 상위 10개만 사용
-        setTop10(topBottomRes.data.top_10 || []);
-      } catch (err) {
-        console.error(err);
+        const [dailyTopRes, topBottomRes] = await Promise.all([
+          axios.get(`${API_BASE}/api/daily-top-sales`),
+          axios.get(`${API_BASE}/api/topbottom`)
+        ]);
+        
+        setDailyTopSales(dailyTopRes.data);
+        if (topBottomRes.data.top_10) {
+          setTop10(topBottomRes.data.top_10);
+        }
+      } catch (error) {
+        console.error('Error fetching data:', error);
       }
     };
+
     fetchData();
   }, []);
 
@@ -695,6 +708,49 @@ function DashPage() {
     gap: "20px"
   };
 
+  // 거래 내역 컨테이너 스타일
+  const TRANSACTIONS_CONTAINER_STYLE = {
+    display: "flex",
+    justifyContent: "space-between",
+    width: "95%",
+    maxWidth: "2100px",
+    margin: "20px auto",
+    gap: "20px"
+  };
+
+  // 거래 카드 공통 스타일
+  const TRANSACTION_CARD_STYLE = {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: "12px",
+    boxShadow: "0 4px 10px rgba(0,0,0,0.1)",
+    padding: "20px",
+    height: "400px",
+    overflow: "auto"
+  };
+
+  // 거래 항목 스타일
+  const TRANSACTION_ITEM_STYLE = {
+    display: "flex",
+    alignItems: "center",
+    padding: "12px 0",
+    borderBottom: "1px solid #eee"
+  };
+
+  // 상태 표시 스타일
+  const STATUS_STYLE = (status) => ({
+    padding: "4px 8px",
+    borderRadius: "12px",
+    fontSize: "12px",
+    backgroundColor: 
+      status === "completed" ? "#e6f4ea" :
+      status === "pending" ? "#fff3e0" : "#ffebee",
+    color: 
+      status === "completed" ? "#1e8e3e" :
+      status === "pending" ? "#f57c00" : "#d32f2f",
+    marginRight: "10px"
+  });
+
   return (
     <div style={PAGE_STYLE}>
       <h1 style={TITLE_STYLE}>데이터 대시보드</h1>
@@ -772,7 +828,6 @@ function DashPage() {
           ))}
         </div>
       </div>
-
 
       {/* (일간/주간/월간 KPI 카드와 Trend-list 영역) */}
       <div style={GRAPH_SECTION_STYLE}>
@@ -921,84 +976,159 @@ function DashPage() {
         </div>
       </div>
 
-      {/* 판매수량 상위 10개 품목 - 카드 형태로 변경 */}
-      <div style={{ width: "84%", margin: "20px auto" }}>
-        <h2 style={TITLE_STYLE}>판매수량 상위 10개 품목</h2>
-
+      {/* 최하단 섹션 */}
+      <div style={{
+        display: 'flex',
+        width: '95%',
+        maxWidth: '2100px',
+        margin: '20px auto',
+        gap: '20px'
+      }}>
+        {/* 왼쪽: 일간 최다 매출 (상위 7개) */}
         <div style={{
-          display: "flex",
-          flexDirection: "column",
-          borderRadius: "12px",
-          padding: "20px",
-          backgroundColor: "#fff",
-          boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.1)"
+          flex: '0 0 60%',
+          backgroundColor: 'white',
+          borderRadius: '16px',
+          padding: '30px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.06)',
+          minHeight: '600px'
         }}>
-          {top10.map((item, index) => {
-            // 순위별 스타일 적용
-            let rankText = `${index + 1}th`;
-            let rankColor = "#888"; // 기본 회색
+          <h2 style={{ 
+            fontSize: '22px', 
+            marginBottom: '30px',
+            color: '#2c3e50',
+            fontWeight: '600',
+            letterSpacing: '0.3px'
+          }}>일간 최다 매출 상품</h2>
+          
+          {/* 테이블 헤더 */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1.2fr 1.5fr 1fr 1fr',
+            padding: '16px 25px',
+            background: 'linear-gradient(145deg, #f8f9fa, #f1f3f5)',
+            borderRadius: '12px',
+            marginBottom: '15px',
+            fontWeight: '600',
+            color: '#505764',
+            fontSize: '15px',
+            letterSpacing: '0.5px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+          }}>
+            <div>대분류</div>
+            <div>소분류</div>
+            <div>날짜</div>
+            <div style={{ textAlign: 'right' }}>매출액</div>
+          </div>
 
-            if (index === 0) {
-              rankText = "🥇 1st"; // 1등
-              rankColor = "#FFD700"; // 금색
-            } else if (index === 1) {
-              rankText = "🥈 2nd"; // 2등
-              rankColor = "#C0C0C0"; // 은색
-            } else if (index === 2) {
-              rankText = "🥉 3rd"; // 3등
-              rankColor = "#CD7F32"; // 동색
-            }
-
-            return (
-              <div key={item.ID} style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                backgroundColor: "#f8f9fa",
-                borderRadius: "10px",
-                padding: "15px 20px",
-                marginBottom: "10px",
-                color: "#333",
-                boxShadow: "0px 2px 6px rgba(0,0,0,0.1)"
+          {/* 테이블 내용 */}
+          <div style={{ marginTop: '15px' }}>
+            {dailyTopSales.map((item, index) => (
+              <div key={index} style={{
+                display: 'grid',
+                gridTemplateColumns: '1.2fr 1.5fr 1fr 1fr',
+                padding: '22px 25px',
+                alignItems: 'center',
+                borderBottom: '1px solid #eef2f6',
+                transition: 'all 0.2s ease',
+                background: index % 2 === 0 ? 'white' : 'linear-gradient(145deg, #fcfcfc, #fafbfc)',
+                borderRadius: '8px',
+                margin: '8px 0',
+                ':hover': {
+                  transform: 'translateX(5px)',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+                }
               }}>
-                {/* 순위 및 카드 내용 */}
-                <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
-                  <span style={{
-                    backgroundColor: rankColor,
-                    padding: "6px 12px",
-                    borderRadius: "15px",
-                    color: "#FFF",
-                    fontSize: "14px",
-                    fontWeight: "bold"
-                  }}>
-                    {rankText}
-                  </span>
-                  <div>
-                    <div style={{ fontSize: "18px", fontWeight: "bold" }}>
-                      {item.Sub3 || "미분류"}
-                    </div>
-                    <div style={{ fontSize: "14px", color: "#555" }}>
-                      상품 ID: {item.ID}
-                    </div>
-                  </div>
+                <div style={{ 
+                  color: '#505764',
+                  fontSize: '15px',
+                  fontWeight: '500',
+                  letterSpacing: '0.3px'
+                }}>{item.category}</div>
+                <div style={{ 
+                  color: '#2c3e50',
+                  fontWeight: '600',
+                  fontSize: '16px',
+                  letterSpacing: '0.3px'
+                }}>{item.subcategory}</div>
+                <div style={{ 
+                  color: '#6c757d',
+                  fontSize: '15px',
+                  letterSpacing: '0.3px'
+                }}>
+                  {new Date(item.date).toLocaleDateString('ko-KR', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
                 </div>
-
-                {/* 판매수량 및 날짜 */}
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "18px", fontWeight: "bold", color: "#333" }}>
-                    {item.총판매수량.toLocaleString()}개
-                  </div>
-                  <div style={{ fontSize: "14px", color: "#666" }}>
-                    Mar 28, 2023
-                  </div>
+                <div style={{ 
+                  fontWeight: '600',
+                  fontSize: '16px',
+                  textAlign: 'right',
+                  color: '#2c3e50',
+                  letterSpacing: '0.5px'
+                }}>
+                  {new Intl.NumberFormat('ko-KR', {
+                    style: 'currency',
+                    currency: 'KRW',
+                    maximumFractionDigits: 0
+                  }).format(item.sales)}
                 </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
+        </div>
+
+        {/* 오른쪽: 판매수량 순위표 */}
+        <div style={{
+          flex: '0 0 40%',  // 40% 너비 고정
+          backgroundColor: 'white',
+          borderRadius: '16px',
+          padding: '25px',
+          boxShadow: '0 8px 16px rgba(0,0,0,0.08)',
+          minHeight: '600px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between'
+        }}>
+          <div>
+            <h2 style={{ fontSize: '18px', marginBottom: '20px' }}>판매수량 상위 품목</h2>
+            <div>
+              {top10.slice(0, showAllItems ? 10 : 5).map((item, index) => (
+                <div key={index} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '15px',
+                  borderBottom: '1px solid #eee'
+                }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: '500' }}>{item.Sub3}</div>
+                    <div style={{ color: '#666', fontSize: '14px' }}>
+                      총 판매수량: {item.총판매수량}개
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* View All Items 버튼 */}
+          <div 
+            onClick={() => setShowAllItems(!showAllItems)}
+            style={{
+              textAlign: 'center',
+              color: '#2196f3',
+              padding: '10px',
+              cursor: 'pointer',
+              borderTop: '1px solid #eee',
+              marginTop: '20px'
+            }}
+          >
+            {showAllItems ? 'Show Less' : 'View All Items'}
+          </div>
         </div>
       </div>
-
-
     </div>
   );
 }

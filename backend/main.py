@@ -609,6 +609,31 @@ def get_top_sales_items():
         print(f"Error in get_top_sales_items: {str(e)}")
         return []
 
+@app.get("/api/daily-top-sales")
+def get_daily_top_sales():
+    try:
+        # 이미 병합된 df_sales 사용 (대분류, 소분류 정보 포함)
+        latest_date = df_sales['date'].max()
+        latest_sales = df_sales[df_sales['date'] == latest_date].copy()
+        
+        # 제품별 매출액 합계 계산 및 상위 7개 선택
+        daily_top_7 = latest_sales.groupby(['id', '대분류', '소분류'], as_index=False)['매출액'].sum()
+        daily_top_7 = daily_top_7.nlargest(7, '매출액')
+        
+        # 결과 포맷팅
+        result = [{
+            'id': str(row['id']),
+            'category': row['대분류'],  # 대분류
+            'subcategory': row['소분류'],  # 소분류
+            'sales': float(row['매출액']),
+            'date': latest_date
+        } for _, row in daily_top_7.iterrows()]
+        
+        return result
+    except Exception as e:
+        print(f"Error in get_daily_top_sales: {str(e)}")
+        return []
+
 # main
 if __name__ == "__main__":
     import uvicorn
