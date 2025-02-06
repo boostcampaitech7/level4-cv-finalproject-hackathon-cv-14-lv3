@@ -38,10 +38,10 @@ ln -s "$(pwd)/main.py" ~/airflow/dags/
 ### 실행 방법
 ``` bash
 # Airflow 웹서버 실행 (터미널 1):
-bashCopypoetry run airflow webserver -p 8080
+poetry run airflow webserver -p 8080
 
 # Airflow 스케줄러 실행 (터미널 2):
-bashCopypoetry run airflow scheduler
+poetry run airflow scheduler
 ```
 - 웹 인터페이스 접속: 브라우저에서 0.0.0.0:8080 접속
 - admin/admin으로 로그인
