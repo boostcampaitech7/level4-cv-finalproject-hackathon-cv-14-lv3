@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 from datetime import datetime
@@ -633,6 +633,180 @@ def get_daily_top_sales():
     except Exception as e:
         print(f"Error in get_daily_top_sales: {str(e)}")
         return []
+        
+
+@app.get("/api/inventory")
+def get_inventory(sort: str = "asc", main: str = None, sub1: str = None, sub2: str = None):
+    try:
+        response = supabase.from_('product_inventory').select("""
+            id, value,
+            product_info (
+                main, sub1, sub2, sub3
+            )
+        """).execute()
+
+        df_inventory = pd.DataFrame(response.data)
+
+        # ✅ `id` 값을 유지하고 문자열로 변환 (프론트와 일관되게 매핑)
+        df_inventory["id"] = df_inventory["id"].astype(str)
+
+        # ✅ `product_info` 컬럼에서 필요한 값 추출
+        df_inventory["main"] = df_inventory["product_info"].apply(lambda x: x.get("main", None) if isinstance(x, dict) else None)
+        df_inventory["sub1"] = df_inventory["product_info"].apply(lambda x: x.get("sub1", None) if isinstance(x, dict) else None)
+        df_inventory["sub2"] = df_inventory["product_info"].apply(lambda x: x.get("sub2", None) if isinstance(x, dict) else None)
+        df_inventory["sub3"] = df_inventory["product_info"].apply(lambda x: x.get("sub3", None) if isinstance(x, dict) else None)
+
+        # ✅ 불필요한 컬럼 제거 (`product_info`는 원본 JSON이므로 삭제)
+        df_inventory = df_inventory.drop(columns=["product_info"])
+        
+        # ✅ 필터링 적용
+        if main:
+            df_inventory = df_inventory[df_inventory["main"] == main]
+        if sub1:
+            df_inventory = df_inventory[df_inventory["sub1"] == sub1]
+        if sub2:
+            df_inventory = df_inventory[df_inventory["sub2"] == sub2]
+
+        # ✅ 재고 수량(value) 기준 정렬
+        df_inventory = df_inventory.sort_values(by=["value"], ascending=(sort == "asc"))
+
+        return df_inventory.to_dict(orient="records")
+    
+    except Exception as e:
+        print(f"❌ Error fetching inventory: {e!s}")
+        return {"error": str(e)}
+
+# ✅ 카테고리 필터 엔드포인트
+@app.get("/api/category_filters")
+def get_category_filters(main: str = None, sub1: str = None, sub2: str = None):
+    """
+    선택된 main, sub1, sub2를 기반으로 가능한 sub1, sub2, sub3 목록 반환
+    """
+    try:
+        response = supabase.from_('product_info').select("main, sub1, sub2, sub3").execute()
+        df = pd.DataFrame(response.data)
+
+        filters = {}
+
+        if main and sub1 and sub2:
+            filters["sub3"] = sorted(df[(df["main"] == main) & (df["sub1"] == sub1) & (df["sub2"] == sub2)]["sub3"].dropna().unique().tolist())
+        elif main and sub1:
+            filters["sub2"] = sorted(df[(df["main"] == main) & (df["sub1"] == sub1)]["sub2"].dropna().unique().tolist())
+        elif main:
+            filters["sub1"] = sorted(df[df["main"] == main]["sub1"].dropna().unique().tolist())
+        else:
+            filters["main"] = sorted(df["main"].dropna().unique().tolist())
+
+        return {"status": "success", "filters": filters}
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+
+# ✅ 최소 재고 기준(ROP) 계산 (서버 실행 시 한 번만 수행)
+def compute_fixed_reorder_points():
+    try:
+        response = supabase.from_('monthly_sales').select("*").execute()
+        df_sales = pd.DataFrame(response.data)
+
+        if df_sales.empty:
+            return {}
+
+        # ✅ 전체 데이터 기준으로 월 평균 판매량 계산
+        valid_dates = [col for col in df_sales.columns if re.match(r"\d{2}_m\d{2}", col)]
+        df_sales["monthly_avg_sales"] = df_sales[valid_dates].mean(axis=1).fillna(0)
+
+        # ✅ 전체 데이터 기준으로 일 평균 판매량 계산
+        df_sales["daily_avg_sales"] = df_sales["monthly_avg_sales"] / 30
+
+        # ✅ 최소 재고 기준(ROP) 계산: 일 평균 판매량의 2배 + 10
+        df_sales["reorder_point"] = (df_sales["daily_avg_sales"] * 2 + 10).fillna(10)
+
+        # ✅ `id`를 문자열로 변환하여 JSON 직렬화 오류 방지
+        df_sales["id"] = df_sales["id"].astype(str)
+
+        # ✅ 최소 재고 기준을 딕셔너리 형태로 저장
+        reorder_points = df_sales.set_index("id")["reorder_point"].to_dict()
+
+        return reorder_points
+
+    except Exception as e:
+        print(f"❌ 최소 재고 기준 계산 오류: {str(e)}")
+        return {}
+
+# ✅ 서버 실행 시 최초 계산하여 저장
+FIXED_REORDER_POINTS = compute_fixed_reorder_points()
+
+    
+@app.get("/api/reorder_points")
+def get_reorder_points(start: str, end: str):
+    try:
+        response = supabase.from_('monthly_sales').select("*").execute()
+        df_sales = pd.DataFrame(response.data)
+
+        if df_sales.empty:
+            return {"error": "🚨 Supabase에서 데이터를 불러오지 못했습니다."}
+
+        # ✅ 선택한 기간의 월별 판매량 데이터 가져오기
+        valid_dates = [col for col in df_sales.columns if re.match(r"\d{2}_m\d{2}", col)]
+        selected_dates = [col for col in valid_dates if start <= col <= end]
+
+        if not selected_dates:
+            return {"error": "🚨 선택한 기간의 데이터가 없습니다."}
+
+        # ✅ 선택한 기간에 대한 월/일 평균 판매량 계산
+        df_sales["monthly_avg_sales"] = df_sales[selected_dates].mean(axis=1).fillna(0)
+        df_sales["daily_avg_sales"] = df_sales["monthly_avg_sales"] / 30
+
+        # ✅ 최소 재고 기준(ROP)은 서버 시작 시 계산된 값 사용
+        df_sales["reorder_point"] = df_sales["id"].map(lambda x: FIXED_REORDER_POINTS.get(str(x), 10))
+
+        # ✅ ID를 문자열로 변환하여 JSON 직렬화 문제 방지
+        df_sales["id"] = df_sales["id"].astype(str)
+
+        # ✅ 필요한 데이터만 반환
+        reorder_data = df_sales[["id", "monthly_avg_sales", "daily_avg_sales", "reorder_point"]].to_dict(orient="records")
+
+        return reorder_data
+
+    except Exception as e:
+        print(f"❌ ROP 갱신 오류: {str(e)}")
+        return {"error": str(e)}
+    
+# ✅ 자동 주문 완료 리스트 저장
+auto_orders = {}
+
+# ✅ 자동 주문 완료 리스트 저장 API
+@app.post("/api/auto_orders")
+def save_auto_order(order_data: dict):
+    """
+    자동 주문 완료된 상품 목록을 저장하는 엔드포인트
+    order_data 예시:
+    {
+        "order_id": "ORD12345",
+        "items": [
+            {"sub3": "상품A"},
+            {"sub3": "상품B"}
+        ],
+        "order_date": "2024-02-06T12:34:56"
+    }
+    """
+    if not order_data or "items" not in order_data or not order_data["items"]:
+        raise HTTPException(status_code=400, detail="잘못된 데이터 형식입니다.")
+
+    for item in order_data["items"]:
+        sub3 = item["sub3"]
+        auto_orders[sub3] = {"status": "success", "order_date": order_data["order_date"]}
+
+    return {"status": "success", "message": "자동 주문 완료 리스트 저장됨", "order_id": order_data["order_id"]}
+
+# ✅ 자동 주문 완료 리스트 조회 API
+@app.get("/api/auto_orders")
+def get_auto_orders():
+    """저장된 자동 주문 완료 리스트를 반환하는 엔드포인트"""
+    return {"status": "success", "orders": auto_orders}
+
 
 # main
 if __name__ == "__main__":
