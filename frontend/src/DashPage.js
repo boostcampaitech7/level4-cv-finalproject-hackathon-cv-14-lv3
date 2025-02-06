@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, Suspense, lazy } from 'react';
 import axios from 'axios';
 import Plot from 'react-plotly.js';
 
@@ -31,16 +31,14 @@ const ROW_STYLE = {
 };
 
 const SECTION_STYLE = {
-  backgroundColor: "white",
-  borderRadius: "15px",
-  boxShadow: "0px 4px 6px rgba(0, 0, 0, 0.1)",
-  padding: "20px",
-  marginBottom: "20px",
-  border: "1px solid #e0e0e0",
-  width: '48%',
-  display: 'inline-block',
-  verticalAlign: 'top'
+  width: "95%",
+  maxWidth: "2100px",
+  margin: "20px auto",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center"
 };
+
 const GRAPH_STYLE = {
   margin: "20px",
   padding: "20px",
@@ -48,25 +46,22 @@ const GRAPH_STYLE = {
   borderRadius: "10px",
   boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.1)"
 };
+
 const KPI_ALL_STYLE = {
-  marginTop: "10px",
-  marginBottom: "10px",
-  backgroundColor: "#f4f4f9",
-  width: "95%",
+  width: "95%",  // KPI 카드들과 동일한 너비
   maxWidth: "2100px",
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
-  padding: "10px",
-  marginLeft: "auto",
-  marginRight: "auto"
+  padding: "10px 20px",  // 좌우 패딩 추가
+  margin: "0 auto"  // 중앙 정렬
 };
 
 // 공통 박스 스타일
 const BOX_CONTAINER_STYLE = {
   width: "400px",
-  height: "400px",           // 원하는 동일 높이로 지정
+  height: "600px",  // 동일한 높이 설정
   minWidth: "300px",
   backgroundColor: "#fff",
   borderRadius: "12px",
@@ -77,7 +72,7 @@ const BOX_CONTAINER_STYLE = {
   display: "flex",
   flexDirection: "column",
   justifyContent: "space-between",
-  overflow: "auto"   // 내용이 넘칠 경우 자동 스크롤 (필요 시)
+  overflow: "auto"
 };
 
 
@@ -102,7 +97,8 @@ function formatCurrency(value) {
 ////////////////////////////////////////
 
 const WATCHLIST_CONTAINER_STYLE = {
-  ...BOX_CONTAINER_STYLE  // 공통 스타일로 동일 크기 적용
+  ...BOX_CONTAINER_STYLE,
+  height: "600px"  // 매출 그래프와 동일한 높이
 };
 
 const WATCHLIST_HEADER_STYLE = {
@@ -202,6 +198,10 @@ const WATCHLIST_ITEMS_CONTAINER = {
   display: "flex",
   flexDirection: "column"
 };
+
+// LazyPlot 컴포넌트 정의
+const LazyPlot = lazy(() => import('react-plotly.js'));
+
 function KpiCard({
   title,
   currentValue,
@@ -726,56 +726,41 @@ function DashPage() {
   const [selectedPeriod, setPeriod] = useState("일간");
   const [topSalesItems, setTopSalesItems] = useState([]);
 
-  const TopSalesItem = ({ item }) => {
-    // 컴포넌트 마운트 시 한 번만 데이터 생성하도록 useMemo 사용
-    const sparklineData = useMemo(() => {
-      const points = Array.from({ length: 20 }, (_, i) => {
-        const trend = item.change_rate >= 0 ? 1 : -1;
-        return 50 + trend * (Math.random() * 15 + Math.sin(i/3) * 10 + i * 2);
-      });
-      return points;
-    }, [item.change_rate]); // item.change_rate가 변경될 때만 재계산
-
-    const isPositive = item.change_rate >= 0;
-    const gradientColor = isPositive ? 
-      'rgba(220, 53, 69, 0.1)' : 
-      'rgba(0, 123, 255, 0.1)';
-
-    // Plot 컴포넌트의 설정을 미리 메모이제이션
-    const plotConfig = useMemo(() => ({
-      data: [{
-        y: sparklineData,
-        type: 'scatter',
-        mode: 'lines',
-        fill: 'tonexty',
-        line: {
-          color: isPositive ? '#dc3545' : '#007bff',
-          width: 2,
-          shape: 'spline'
-        },
-        fillcolor: gradientColor
-      }],
-      layout: {
-        width: 150,  // 그래프 크기 증가
-        height: 80,  // 그래프 크기 증가
-        margin: { l: 0, r: 0, t: 0, b: 0 },
-        paper_bgcolor: 'rgba(0,0,0,0)',
-        plot_bgcolor: 'rgba(0,0,0,0)',
-        xaxis: { 
-          visible: false,
-          showgrid: false
-        },
-        yaxis: { 
-          visible: false,
-          showgrid: false
-        }
-      },
-      config: { 
-        displayModeBar: false,
-        responsive: true
+  // 최다 매출 상품 데이터만 별도로 빠르게 fetch
+  useEffect(() => {
+    const fetchTopSales = async () => {
+      try {
+        const response = await axios.get(`${API_BASE}/api/top-sales-items`, {
+          // timeout 설정 및 우선순위 높임
+          timeout: 3000,
+          headers: {
+            'Priority': 'high'
+          }
+        });
+        
+        // 데이터 가공을 최소화
+        const items = response.data.map(item => ({
+          ...item,
+          // 필요한 속성만 추출
+          id: item.id,
+          name: item.name,
+          change_rate: item.change_rate
+        }));
+        
+        setTopSalesItems(items);
+      } catch (error) {
+        console.error('Error fetching top sales items:', error);
+        setTopSalesItems([]); // 에러 시 빈 배열로 설정
       }
-    }), [sparklineData, isPositive, gradientColor]);
+    };
 
+    fetchTopSales();
+  }, []); // 독립적인 useEffect로 분리
+
+  // TopSalesItem 컴포넌트 메모이제이션
+  const MemoizedTopSalesItem = useMemo(() => React.memo(({ item }) => {
+    const isPositive = item.change_rate >= 0;
+    
     return (
       <div style={{
         display: 'flex',
@@ -787,12 +772,7 @@ function DashPage() {
         margin: '10px',
         width: 'calc(20% - 30px)',
         minWidth: '300px',
-        height: '140px',
-        transition: 'transform 0.2s, box-shadow 0.2s',
-        ':hover': {
-          transform: 'translateY(-5px)',
-          boxShadow: '0 12px 20px rgba(0, 0, 0, 0.12)'
-        }
+        height: '140px'
       }}>
         <div style={{ flex: 1 }}>
           <div style={{ 
@@ -816,13 +796,51 @@ function DashPage() {
           </div>
         </div>
         <div style={{ width: '150px', height: '80px' }}>
-          <Plot
-            {...plotConfig}
-          />
+          <Suspense fallback={
+            <div style={{ 
+              width: '100%', 
+              height: '100%', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              backgroundColor: '#f8f9fa',
+              borderRadius: '8px'
+            }}>
+              <span>Loading...</span>
+            </div>
+          }>
+            <LazyPlot 
+              data={[{
+                y: Array.from({ length: 20 }, (_, i) => {
+                  const trend = item.change_rate >= 0 ? 1 : -1;
+                  return 50 + trend * (Math.random() * 15 + Math.sin(i/3) * 10 + i * 2);
+                }),
+                type: 'scatter',
+                mode: 'lines',
+                fill: 'tonexty',
+                line: {
+                  color: isPositive ? '#dc3545' : '#007bff',
+                  width: 2,
+                  shape: 'spline'
+                },
+                fillcolor: isPositive ? 'rgba(220, 53, 69, 0.1)' : 'rgba(0, 123, 255, 0.1)'
+              }]}
+              layout={{
+                width: 150,
+                height: 80,
+                margin: { l: 0, r: 0, t: 0, b: 0 },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                xaxis: { visible: false, showgrid: false },
+                yaxis: { visible: false, showgrid: false }
+              }}
+              config={{ displayModeBar: false }}
+            />
+          </Suspense>
         </div>
       </div>
     );
-  };
+  }), []);
 
   // TopSalesItems를 감싸는 컨테이너 스타일
   const TOP_SALES_CONTAINER_STYLE = {
@@ -833,14 +851,16 @@ function DashPage() {
     flexWrap: "nowrap",
     gap: "15px",
     overflowX: "auto",
-    padding: "15px 0",
-    width: "100%",
-    maxWidth: "100%",
-    scrollbarWidth: 'none',
-    msOverflowStyle: 'none',
-    '&::-webkit-scrollbar': {
-      display: 'none'
-    }
+    width: "100%",  // 전체 너비 사용
+    padding: "15px 0"  // 좌우 패딩 제거
+  };
+
+  // 매출 그래프와 트렌드 리스트를 감싸는 컨테이너 스타일 수정
+  const GRAPH_SECTION_STYLE = {
+    ...SECTION_STYLE,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "20px"
   };
 
   return (
@@ -916,29 +936,13 @@ function DashPage() {
 
       {/* (급상승 품목 슬라이드) */}
       <div style={KPI_ALL_STYLE}>
-        <h2 style={TITLE_STYLE}>
-          최근 3개월 최다 매출 상품
-          <svg
-            style={{
-              width: "24px",
-              height: "24px",
-              marginLeft: "8px",
-              verticalAlign: "middle"
-            }}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#333"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M12 20V10" />
-            <path d="M18 14l-6-6-6 6" />
-          </svg>
-        </h2>
+        <h2 style={TITLE_STYLE}>최근 3개월 최다 매출 상품</h2>
         <div style={TOP_SALES_CONTAINER_STYLE}>
           {topSalesItems.map((item, index) => (
-            <TopSalesItem key={index} item={item} />
+            <MemoizedTopSalesItem 
+              key={item.id || index} 
+              item={item} 
+            />
           ))}
         </div>
       </div>
@@ -947,17 +951,7 @@ function DashPage() {
         (2) 오른쪽에 "Trend-list" 박스
         => 둘 다 BOX_CONTAINER_STYLE
       */}
-      <div style={{
-        display: "flex",
-        flexDirection: "row",
-        justifyContent: "center",
-        alignItems: "flex-start",
-        width: "100%",
-        maxWidth: "2100px",
-        padding: "0 20px",
-        marginBottom: "20px",
-        margin: "0 auto"
-      }}>
+      <div style={GRAPH_SECTION_STYLE}>
         {/* 왼쪽: 통합 KPI 카드 */}
         <div style={{
           ...KPI_CARD_CONTAINER_STYLE,
