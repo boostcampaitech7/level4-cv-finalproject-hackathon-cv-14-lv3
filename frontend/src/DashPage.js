@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo, Suspense, lazy } from 'react';
 import axios from 'axios';
 import Plot from 'react-plotly.js';
-import { FaTrophy, FaMedal } from 'react-icons/fa';
+import { FaTrophy, FaMedal, FaTshirt, FaGem, FaHome, FaLeaf, FaRunning, FaBook, FaBaby, FaUmbrellaBeach, FaShoppingBag, FaSprayCan, FaUtensils, FaDumbbell, FaAppleAlt } from 'react-icons/fa';
 import { IoMdMedal } from 'react-icons/io';
 
 ////////////////////////////////////////
@@ -135,13 +135,17 @@ const WATCHLIST_TITLE_STYLE = {
 };
 
 const WATCHLIST_ITEM_STYLE = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: "15px 0",
-  borderBottom: "1px solid #f0f0f0",
-  fontSize: "16px"
+  display: 'flex',
+  alignItems: 'center',
+  padding: '12px',
+  borderBottom: '1px solid #eee',
+  transition: 'background-color 0.2s',
+  cursor: 'pointer',
+  ':hover': {
+    backgroundColor: '#f8f9fa'
+  }
 };
+
 const WATCHLIST_ITEM_LEFT_STYLE = {
   display: "flex",
   alignItems: "center"
@@ -223,37 +227,129 @@ const WATCHLIST_ITEMS_CONTAINER = {
 ////////////////////////////////////////
 // 3) WatchListItem
 ////////////////////////////////////////
-function WatchListItem({ item }) {
-  const { icon, symbol, name, price, diff } = item;
-  const isPositive = diff >= 0;
-  const diffStr = diff >= 0 ? `+${diff.toFixed(2)}%` : `${diff.toFixed(2)}%`;
 
+// 스타일 정의 추가
+const WATCHLIST_INFO_STYLE = {
+  flex: 1,
+  marginLeft: '12px'
+};
+
+const WATCHLIST_SYMBOL_STYLE = {
+  fontSize: '14px',
+  color: '#666',
+  marginBottom: '4px'
+};
+
+const WATCHLIST_NAME_STYLE = {
+  fontSize: '16px',
+  fontWeight: '600',
+  color: '#333'
+};
+
+// 카테고리별 아이콘 매핑 함수 수정
+const getCategoryIcon = (category) => {
+  // 아이콘 색상 정의
+  const iconColors = {
+    '여가/생활편의': '#FFB74D',  // 해변 파라솔 - 밝은 주황색
+    '패션의류': '#E57373',       // 티셔츠 - 연한 빨간색
+    '패션잡화': '#BA68C8',       // 쇼핑백 - 보라색
+    '화장품/미용': '#F48FB1',    // 스프레이 - 분홍색
+    '홈/리빙': '#81C784',        // 집 - 초록색
+    '식품': '#E53935',           // 사과 - 빨간색
+    '스포츠/레저': '#42A5F5',    // 달리는 사람 - 파란색
+    '도서/음반': '#8D6E63',      // 책 - 갈색
+    '유아동': '#4DD0E1'          // 아기 - 하늘색
+  };
+
+  const iconStyle = {
+    fontSize: '24px',
+    color: iconColors[category] || '#505764'
+  };
+
+  // WatchListItem 컴포넌트에서 사용할 정보 반환
+  const icon = (() => {
+    switch(category) {
+      case '여가/생활편의':
+        return <FaUmbrellaBeach style={iconStyle} />;
+      case '패션의류':
+        return <FaTshirt style={iconStyle} />;
+      case '패션잡화':
+        return <FaShoppingBag style={iconStyle} />;
+      case '화장품/미용':
+        return <FaSprayCan style={iconStyle} />;
+      case '홈/리빙':
+        return <FaHome style={iconStyle} />;
+      case '식품':
+        return <FaAppleAlt style={iconStyle} />;
+      case '스포츠/레저':
+        return <FaRunning style={iconStyle} />;
+      case '도서/음반':
+        return <FaBook style={iconStyle} />;
+      case '유아동':
+        return <FaBaby style={iconStyle} />;
+      default:
+        return <FaHome style={iconStyle} />;
+    }
+  })();
+
+  return {
+    icon,
+    color: '#666' // 카테고리 배지 색상은 기존 회색으로 유지
+  };
+};
+
+// WatchListItem 컴포넌트 수정
+const WatchListItem = ({ item }) => {
+  const iconData = getCategoryIcon(item.symbol);
+  
   return (
     <div style={WATCHLIST_ITEM_STYLE}>
-      <div style={WATCHLIST_ITEM_LEFT_STYLE}>
-        {icon && (
-          <img
-            src={icon}
-            alt={symbol}
-            style={WATCHLIST_LOGO_STYLE}
-          />
-        )}
-        <div>
-          <div style={WATCHLIST_ITEM_NAME_STYLE}>{symbol}</div>
-          <div style={WATCHLIST_ITEM_SUBNAME_STYLE}>{name}</div>
+      <div style={{
+        width: '40px',
+        height: '40px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#f8f9fa', // 배경색은 기존 회색으로 유지
+        borderRadius: '8px',
+        marginRight: '12px'
+      }}>
+        {iconData.icon}
+      </div>
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        <div style={{
+          fontSize: '16px',
+          fontWeight: '600',
+          color: '#333',
+          marginBottom: '4px'
+        }}>
+          {item.name}
+        </div>
+        <div style={{
+          fontSize: '14px',
+          color: '#999'
+        }}>
+          ID: {item.id}
         </div>
       </div>
-      <div style={WATCHLIST_ITEM_RIGHT_STYLE}>
-        <div style={WATCHLIST_PRICE_STYLE}>
-          {formatCurrency(price)}
-        </div>
-        <div style={WATCHLIST_DIFF_STYLE(isPositive)}>
-          {diffStr}
-        </div>
+      <div style={{
+        fontSize: '14px',
+        color: '#666',
+        backgroundColor: '#f5f5f5',
+        padding: '4px 8px',
+        borderRadius: '4px',
+        alignSelf: 'center',
+        fontWeight: '500'
+      }}>
+        {item.symbol}
       </div>
     </div>
   );
-}
+};
 
 ////////////////////////////////////////
 // 4) AnimatedGraph
@@ -374,43 +470,7 @@ function DashPage() {
   // bottom10, lastMonthCol 등 기존 변수는 그대로 남겨두거나 필요에 따라 제거
 
   // 예: 상위 5개 트렌드 상품 (Watchlist 용)
-  const [topTrends, setTopTrends] = useState([
-    {
-      icon: "https://img1.daumcdn.net/thumb/C500x500.fjpg/?fname=http://t1.daumcdn.net/brunch/service/user/c86j/image/MwGCP7OUtNBhaP4LtP1Xcebp3tM.heic",
-      symbol: "Chii guy",
-      name: "Chii guy",
-      price: 310.4,
-      diff: -1.10
-    },
-    {
-      icon: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTnhP--FPnVg3t9DG_HBf3CnzIzJotRvgvyhw&s",
-      symbol: "햄부기햄북",
-      name: "햄북어 햄북스딱스",
-      price: 132.72,
-      diff: -10.29
-    },
-    {
-      icon: "https://i.namu.wiki/i/Fi8DbSs6wIjHBuahitiQFyVotJmhsO2TekpgBrNPmJK3zdMRrWii_itgMVL4Xo4Tnwou-pI-JzKWeBJ1h--tYA.webp",
-      symbol: "부끄핑",
-      name: "부끄부끄핑",
-      price: 28.57,
-      diff: -6.48
-    },
-    {
-      icon: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQpxqifC-I6Ir6463ZZvSIhIk44TUIf7odGhw&s",
-      symbol: "CALM",
-      name: "chimchackman",
-      price: 71.86,
-      diff: 0.98
-    },
-    {
-      icon: "https://mblogthumb-phinf.pstatic.net/MjAyMTA4MjJfMTYw/MDAxNjI5NTYwODY2MjI0.Vco-WmnxXlIRj08eYipQIVjzvUgeAGrIKZDSPmwvcnog.yzwYknZ2eUK5ZnNyz4nRSxXNoyPYDRC_a8RgPeqRCA8g.JPEG.chooddingg/output_4182079403.jpg?type=w800",
-      symbol: "MUDO",
-      name: "mudo_myungsu",
-      price: 87.66,
-      diff: -3.86
-    }
-  ]);
+  const [topTrends, setTopTrends] = useState([]);
 
   const API_BASE = "http://localhost:8000";
 
@@ -453,6 +513,23 @@ function DashPage() {
         setDailyTopSales(dailyTopRes.data);
         if (topBottomRes.data.top_10) {
           setTop10(topBottomRes.data.top_10);
+        }
+
+        // trend-products API 호출 추가
+        const trendRes = await axios.get(`${API_BASE}/api/trend-products`);
+        if (trendRes.data) {
+          // 데이터 형식 변환
+          const formattedTrends = trendRes.data.map(item => ({
+            symbol: item.category,
+            name: item.product_name,
+            id: item.id,
+            // 임시 아이콘 URL (카테고리별로 다른 이미지를 사용하려면 여기서 매핑)
+            icon: "https://via.placeholder.com/50",
+            // 추가 필드는 임시값 또는 실제 데이터에 맞게 조정
+            price: 0,
+            diff: 0
+          }));
+          setTopTrends(formattedTrends);
         }
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -1003,8 +1080,8 @@ function DashPage() {
             <div style={WATCHLIST_TITLE_STYLE}>Trend-list</div>
           </div>
           <div style={WATCHLIST_ITEMS_CONTAINER}>
-            {topTrends.slice(0, 5).map((item, idx) => (
-              <WatchListItem key={idx} item={item} />
+            {topTrends.map((item, idx) => (
+              <WatchListItem key={item.id || idx} item={item} />
             ))}
           </div>
         </div>

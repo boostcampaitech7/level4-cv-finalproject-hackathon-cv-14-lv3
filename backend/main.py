@@ -132,6 +132,19 @@ def load_inventory_data():
     df = pd.DataFrame(all_data)
     return df
 
+# trend_product 테이블의 데이터를 읽어오는 함수
+def load_trend_data():
+    try:
+        response = supabase.table('trend_product') \
+            .select('product_name, rank, category, id') \
+            .eq('rank', 1) \
+            .execute()
+        
+        df = pd.DataFrame(response.data)
+        return df
+    except Exception as e:
+        print(f"Error loading trend data: {str(e)}")
+        raise
 
 # 데이터 로드
 df_sales = load_sales_data()
@@ -139,7 +152,8 @@ reconnect_supabase()
 inventory_df = load_inventory_data()
 reconnect_supabase()
 df_quantity = load_quantity_data()
-
+reconnect_supabase()
+trend_df = load_trend_data()  # 트렌드 데이터 로드 추가
 
 # ===== 컬럼명 변경 =====
 df_sales = df_sales.rename(columns={'value': '매출액'})
@@ -807,6 +821,13 @@ def get_auto_orders():
     """저장된 자동 주문 완료 리스트를 반환하는 엔드포인트"""
     return {"status": "success", "orders": auto_orders}
 
+@app.get("/api/trend-products")
+async def get_trend_products():
+    try:
+        return trend_df.to_dict(orient='records')
+    except Exception as e:
+        print(f"Error in get_trend_products: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # main
 if __name__ == "__main__":
