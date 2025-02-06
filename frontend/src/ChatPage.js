@@ -29,13 +29,21 @@ const ChatPage = () => {
     setMode(selectedMode);
     const userChoice = selectedMode === 'data' ? '데이터 기반 조회' : '트렌드 분석';
 
-    setChatHistory((prev) => [...prev, 
-      { sender: 'user', content: userChoice },
-      { sender: 'bot', content: selectedMode === 'data' ? 
-        '데이터 기반 조회를 선택하셨습니다. 어떤 정보를 조회하시겠습니까?' :
-        '트렌드 분석을 선택하셨습니다. 어떤 트렌드를 분석하시겠습니까?' 
-      }
-    ]);
+    if (selectedMode === 'data') {
+      setChatHistory((prev) => [...prev, 
+        { sender: 'user', content: userChoice },
+        { sender: 'bot', content: '데이터 기반 조회를 선택하셨습니다. 어떤 정보를 조회하시겠습니까?' }
+      ]);
+    } else {
+      const response = await fetch('http://localhost:8000/api/trend-categories');
+      const data = await response.json();
+      const categoriesList = data.categories.join('\n');
+      
+      setChatHistory((prev) => [...prev, 
+        { sender: 'user', content: userChoice },
+        { sender: 'bot', content: `트렌드 분석을 선택하셨습니다. 조회할 수 있는 카테고리는 아래와 같습니다:\n\n${categoriesList}\n\n어떤 카테고리의 트렌드를 분석하시겠습니까?` }
+      ]);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -60,7 +68,7 @@ const ChatPage = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          content: message,
+          content: message.trim(), 
           mode: mode
         }),
       });
@@ -82,8 +90,10 @@ const ChatPage = () => {
     } finally {
       setIsLoading(false);
       setMessage(''); // 입력 창 초기화
+
+      scrollToBottom(); // 스크롤을 최신 메시지로 이동
     }
-  };
+};
 
   const renderMessage = (chat, index) => (
     <>
@@ -125,7 +135,6 @@ const ChatPage = () => {
       )}
     </>
   );
-  
 
   return (
     <div style={styles.page}>

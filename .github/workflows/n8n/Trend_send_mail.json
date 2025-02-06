@@ -39,25 +39,6 @@
     },
     {
       "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "months"
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.2,
-      "position": [
-        0,
-        0
-      ],
-      "id": "d90134b5-7c50-42b8-b121-cf18dfa58c6e",
-      "name": "Schedule Trigger"
-    },
-    {
-      "parameters": {
         "jsCode": "// 입력 데이터에서 results 배열 가져오기\nconst items = $input.first().json.results;\n\n// 카테고리별로 아이템을 그룹화하고 랭크별로 정렬\nconst processedItems = items.reduce((acc, item) => {\n  const {\n    category,\n    rank,\n    product_name,\n    start_date,\n    end_date\n  } = item;\n\n  // 카테고리가 없으면 초기화\n  if (!acc[category]) {\n    acc[category] = {\n      category: category,\n      period: `${start_date} ~ ${end_date}`,\n      trends: []\n    };\n  }\n\n  // 랭크 5위까지만 수집\n  if (rank <= 5) {\n    acc[category].trends.push({\n      rank: rank,\n      product_name: product_name\n    });\n  }\n\n  return acc;\n}, {});\n\n// 객체를 배열로 변환하고 trends를 랭크 순으로 정렬\nconst sortedResults = Object.values(processedItems).map(categoryData => {\n  return {\n    ...categoryData,\n    trends: categoryData.trends.sort((a, b) => a.rank - b.rank)\n  };\n});\n\n// results 키로 감싸서 반환\nreturn {\n  results: sortedResults\n};"
       },
       "type": "n8n-nodes-base.code",
@@ -107,6 +88,22 @@
           "name": "Gmail account"
         }
       }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "trending",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "cc312829-8528-49ba-8cbc-3135192a29a9",
+      "name": "Webhook",
+      "webhookId": "cdb69a71-57fd-4ccb-ac47-878e9b855b60"
     }
   ],
   "pinData": {},
@@ -127,17 +124,6 @@
         [
           {
             "node": "Info_Extractor",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Schedule Trigger": {
-      "main": [
-        [
-          {
-            "node": "Supabase",
             "type": "main",
             "index": 0
           }
@@ -165,13 +151,24 @@
           }
         ]
       ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "4dde0e25-c510-451c-9daa-984c58540dbf",
+  "versionId": "ddfe85c5-be6a-4c2f-9b6c-bf781d2545f8",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "2bf14225034dfb2d8498032d805718ab7af6ff6458c61a42e219515f095f1c9f"

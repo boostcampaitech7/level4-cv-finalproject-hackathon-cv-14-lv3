@@ -72,12 +72,24 @@ def extract_data(ocr_result):
         [{"category": category, "rank": rank, "product_name": product} for rank, product in valid_products.items()], key=lambda x: x["rank"]
     )
 
+def trigger_n8n_webhook():  
+    # n8n webhook URL
+    webhook_url = "http://localhost:5678/webhook/trending"
+    try:
+        response = requests.post(webhook_url)
+        if response.status_code == 200:
+            print("N8n workflow triggered successfully")
+        else:
+            print(f"Failed to trigger n8n workflow: {response.status_code}")
+    except Exception as e:
+        print(f"Error triggering n8n workflow: {e!s}")
 
 def save_to_supabase(rankings):
     try:
         if rankings:
             result = supabase.table("trend_product").insert(rankings).execute()
             print(f"Saved {len(rankings)} items")
+            trigger_n8n_webhook() # db 저장 후 n8n workflow trigger
             return result
     except Exception as e:
         print(f"Database error: {e}")

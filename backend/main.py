@@ -1,13 +1,13 @@
 import os
-
-import httpx
 import pandas as pd
+from datetime import datetime
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 from supabase import create_client
 from supabase.lib.client_options import ClientOptions
+import time
 
 # 1) FastAPI 앱 생성
 app = FastAPI()
@@ -24,6 +24,7 @@ app.add_middleware(
 # 환경 변수 로드
 load_dotenv()
 UPSTAGE_API_KEY = os.getenv('UPSTAGE_API_KEY')
+UPSTAGE_API_BASE_URL = os.getenv('UPSTAGE_API_BASE_URL')
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 
@@ -34,7 +35,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY, options)
 # OpenAI 클라이언트 초기화
 client = OpenAI(
     api_key=UPSTAGE_API_KEY,
-    base_url="https://api.upstage.ai/v1/solar"
+    base_url=UPSTAGE_API_BASE_URL
 )
 
 # ===== 데이터 로딩 =====
@@ -483,42 +484,21 @@ async def chat_with_solar(message: dict):
             "error": str(e)
         }
 
-@app.post("/api/trend-chat")
-async def chat_with_trend(message: dict):
+@app.get("/api/trend-categories")
+async def get_trend_categories():
     try:
-        # n8n workflow 호출 후 트렌드 분석 응답 받기
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "http://localhost:5678/webhook/trend",
-                json={
-                    "query": "",
-                    "chatInput": message.get("content", "")
-                },
-                timeout=30.0
-            )
-
-            print(f"n8n response status: {response.status_code}")
-            if response.status_code == 200:
-                result = response.json()
-                if "output" not in result:
-                    return {
-                        "response": "n8n workflow에서 올바른 응답을 받지 못했습니다.",
-                        "status": "error"
-                    }
-                return {
-                    "response": result["output"],
-                    "status": "success"
-                }
-            elif response.status_code == 404:
-                return {
-                    "response": "n8n webhook URL을 찾을 수 없습니다.",
-                    "status": "error"
-                }
-            else:
-                return {
-                    "response": f"트렌드 분석 처리 중 오류가 발생했습니다. (Status: {response.status_code})",
-                    "status": "error"
-                }
+        # 단순히 trending_product 테이블에서 모든 카테고리 조회
+        response = supabase.table('trend_product')\
+            .select('category')\
+            .execute()
+        
+        # 중복 제거 및 정렬
+        categories = sorted(list(set([item['category'] for item in response.data])))
+        
+        return {
+            "status": "success",
+            "categories": categories
+        }
 
     except Exception as e:
         print(f"Error in trend-chat: {e!s}")
@@ -526,6 +506,99 @@ async def chat_with_trend(message: dict):
             "status": "error",
             "error": f"서버 오류가 발생했습니다: {e!s}"
         }
+
+@app.post("/api/trend-chat")
+async def chat_with_trend(message: dict):
+   try:
+       # trend_product 테이블에서 모든 데이터 조회
+       response = supabase.table('trend_product')\
+           .select('*')\
+           .order('rank')\
+           .execute()
+
+       trend_data = response.data
+
+       # 트렌드 데이터를 카테고리별로 정리
+       categorized_trends = {}
+       for item in trend_data:
+           category = item['category'].strip()  
+           if category not in categorized_trends:
+               categorized_trends[category] = []
+           categorized_trends[category].append({
+               'rank': item['rank'],
+               'product_name': item['product_name'],
+               'start_date': item['start_date'],
+               'end_date': item['end_date']
+           })
+
+       # 사용자 메시지에서 카테고리 확인
+       user_category = message["content"].strip()
+       
+       if user_category in categorized_trends:
+           # 해당 카테고리의 상위 5개 순위 정보 구성
+           trend_info = []
+           category_data = sorted(categorized_trends[user_category], key=lambda x: x['rank'])[:5]
+           
+           # 기간 정보 추출
+           period = f"{category_data[0]['start_date']} ~ {category_data[0]['end_date']}"
+           
+           # 순위 정보 구성
+           for item in category_data:
+               trend_info.append(f"{item['rank']}위: {item['product_name']}")
+           
+           trend_text = "\n".join(trend_info)
+           
+           # 시스템 메시지 구성
+           system_message = f"""
+           당신은 쇼핑 트렌드 분석 AI 어시스턴트입니다.
+           
+           다음은 {user_category} 카테고리의 {period} 기간 동안의 월간 트렌드 데이터입니다:
+           
+           {trend_text}
+           
+           위 정보를 바탕으로 다음과 같이 응답해주세요:
+           1. 카테고리명 명시
+           2. 상위 5개 제품의 순위와 이름 나열
+           3. 전문적이고 친절한 어조 유지
+           """
+
+           # Solar ChatAPI 응답 생성
+           response = client.chat.completions.create(
+               model="solar-pro",
+               messages=[
+                   {"role": "system", "content": system_message},
+                   {"role": "user", "content": f"{user_category} 카테고리의 트렌드를 알려주세요."}
+               ],
+               temperature=0.0, 
+               stream=False,
+               response_format={"type": "text/html"}
+           )
+
+           if hasattr(response, 'error'):
+               return {
+                   "response": f"API 오류: {response.error}",
+                   "status": "error",
+                   "error": str(response.error)
+               }
+
+           return {
+               "response": response.choices[0].message.content,
+               "status": "success"
+           }
+       else:
+           # 카테고리가 없는 경우 사용 가능한 카테고리 목록 반환
+           available_categories = list(categorized_trends.keys())
+           return {
+               "response": f"죄송합니다. '{user_category}' 카테고리는 현재 트렌드 정보에 없습니다.\n\n조회 가능한 카테고리: {', '.join(available_categories)}",
+               "status": "success"
+           }
+
+   except Exception as e:
+       print(f"Error in trend-chat: {str(e)}")
+       return {
+           "status": "error",
+           "error": f"서버 오류가 발생했습니다: {str(e)}"
+       }
 
 # main
 if __name__ == "__main__":
