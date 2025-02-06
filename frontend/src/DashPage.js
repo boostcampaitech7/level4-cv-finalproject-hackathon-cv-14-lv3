@@ -75,6 +75,24 @@ const BOX_CONTAINER_STYLE = {
   overflow: "auto"
 };
 
+// 테이블 관련 스타일
+const TABLE_STYLE = {
+  width: "100%",
+  borderCollapse: "collapse",
+  margin: "20px 0"
+};
+
+const TABLE_HEADER_STYLE = {
+  backgroundColor: "#f2f2f2",
+  textAlign: "left",
+  padding: "12px",
+  border: "1px solid #ddd"
+};
+
+const TABLE_CELL_STYLE = {
+  padding: "12px",
+  border: "1px solid #ddd"
+};
 
 // 색상 배열 (reds, blues)
 const reds = [
@@ -152,7 +170,8 @@ const WATCHLIST_DIFF_STYLE = (isPositive) => ({
   fontSize: "13px",
   color: isPositive ? "#28a745" : "#dc3545"
 });
-
+// LazyPlot 컴포넌트 정의
+const LazyPlot = lazy(() => import('react-plotly.js'));
 ////////////////////////////////////////
 // 2) KpiCard (그래프 포함) - 공통 박스
 ////////////////////////////////////////
@@ -199,54 +218,10 @@ const WATCHLIST_ITEMS_CONTAINER = {
   flexDirection: "column"
 };
 
-// LazyPlot 컴포넌트 정의
-const LazyPlot = lazy(() => import('react-plotly.js'));
-
-function KpiCard({
-  title,
-  currentValue,
-  diffValue,
-  diffPercent,
-  prevLabel,
-  plotData,
-  plotLayout
-}) {
-  const isPositive = diffValue >= 0;
-  const diffPctStr = diffPercent >= 0
-    ? `+${diffPercent.toFixed(2)}%`
-    : `${diffPercent.toFixed(2)}%`;
-  const diffAbs = Math.abs(diffValue).toLocaleString();
-  const moreOrLess = isPositive ? "more" : "less";
-  const diffText = `${diffAbs} ${moreOrLess} ${prevLabel}`;
-
-  return (
-    <div style={KPI_CARD_CONTAINER_STYLE}>
-      <div style={KPI_CARD_TITLE_STYLE}>{title}</div>
-      <h2 style={KPI_MAIN_VALUE_STYLE}>{formatCurrency(currentValue)}</h2>
-
-      <div style={KPI_DIFF_CONTAINER_STYLE}>
-        <span style={KPI_DIFF_PERCENT_STYLE(isPositive)}>
-          {diffPctStr}
-        </span>
-        <span style={KPI_DIFF_TEXT_STYLE}>{diffText}</span>
-      </div>
-
-      <div style={KPI_GRAPH_WRAPPER_STYLE}>
-        <Plot
-          data={plotData}
-          layout={plotLayout}
-          config={{ displayModeBar: false }}
-        />
-      </div>
-    </div>
-  );
-}
-
 ////////////////////////////////////////
 // 3) WatchListItem
 ////////////////////////////////////////
 function WatchListItem({ item }) {
-  // 예: item = { icon, symbol, name, price, diff }
   const { icon, symbol, name, price, diff } = item;
   const isPositive = diff >= 0;
   const diffStr = diff >= 0 ? `+${diff.toFixed(2)}%` : `${diff.toFixed(2)}%`;
@@ -392,10 +367,9 @@ function DashPage() {
   const [lowStock, setLowStock] = useState([]);
   const [rising, setRising] = useState({ subcat_list: [] });
 
-  // 상/하위 10 (이전 코드 그대로 사용)
+  // 상/하위 10 (판매수량 상위 10개 품목만 사용)
   const [top10, setTop10] = useState([]);
-  const [bottom10, setBottom10] = useState([]);
-  const [lastMonthCol, setLastMonthCol] = useState("");
+  // bottom10, lastMonthCol 등 기존 변수는 그대로 남겨두거나 필요에 따라 제거
 
   // 예: 상위 5개 트렌드 상품 (Watchlist 용)
   const [topTrends, setTopTrends] = useState([
@@ -461,16 +435,11 @@ function DashPage() {
         setLowStock(lowRes.data);
 
         const risingRes = await axios.get(`${API_BASE}/api/rising-subcategories`);
-        // now risingRes.data is { subcategories: [ { name, rise_ratio }, ... ] }
         setRising(risingRes.data);
 
         const topBottomRes = await axios.get(`${API_BASE}/api/topbottom`);
+        // top10는 판매수량 상위 10개만 사용
         setTop10(topBottomRes.data.top_10 || []);
-        setBottom10(topBottomRes.data.bottom_10 || []);
-        setLastMonthCol(topBottomRes.data.last_month_col || "");
-
-        const topSalesRes = await axios.get(`${API_BASE}/api/top-sales-items`);
-        setTopSalesItems(topSalesRes.data);
       } catch (err) {
         console.error(err);
       }
@@ -479,7 +448,6 @@ function DashPage() {
   }, []);
 
   // (증감률 계산, 그래프 setup 등)--------------------------------------------
-  // 예: 일/주/월 계산
   function getLatestAndPrevValue(arr, valKey = "값") {
     const len = arr.length;
     if (len < 2) return { current: 0, prev: 0 };
@@ -591,149 +559,18 @@ function DashPage() {
   ];
 
   ////////////////////////////////////////
-  // 상/하위 10 -> 여기서는 Top3와 Bottom3로 수정
-  ////////////////////////////////////////
-  function getVal(obj) {
-    return lastMonthCol ? (obj[lastMonthCol] || 0) : 0;
-  }
-  // 1) 매출 내림차순 정렬 후 상위 3개 추출
-  const sortedTop3 = [...top10]
-    .sort((a, b) => getVal(b) - getVal(a))
-    .slice(0, 3);
-
-  // 2) 포디엄 순서 [2등, 1등, 3등] 으로 재배치
-  const bestPodiumOrder =
-    sortedTop3.length === 3
-      ? [sortedTop3[1], sortedTop3[0], sortedTop3[2]]
-      : sortedTop3;
-
-  // 3) 각 순위별 "블록 높이"를 다르게 설정
-  //    (예: 1등이 가장 높고, 2등이 중간, 3등이 낮음)
-  const bestHeightMap = {
-    1: "200px", // 1등 크게
-    2: "150px",
-    3: "120px"
-  };
-  const bestColorMap = {
-    1: "#ffef99",  // 1등
-    2: "#cfcfcf",  // 2등
-    3: "#ffd1a9"   // 3등
-  };
-  // 1) 매출 오름차순 정렬 후 하위 3개 추출
-  //    => [0] = 가장 낮은 매출(=1등)
-  const sortedBottom3 = [...bottom10]
-    .sort((a, b) => getVal(a) - getVal(b))
-    .slice(0, 3);
-
-  // 2) 포디엄 순서 [2등, 1등, 3등] 으로 재배치
-  const worstPodiumOrder =
-    sortedBottom3.length === 3
-      ? [sortedBottom3[1], sortedBottom3[0], sortedBottom3[2]]
-      : sortedBottom3;
-
-  // 3) 각 순위별 블록 높이 (이번에는 1등이 가장 낮게)
-  const worstHeightMap = {
-    1: "100px",  // 1등(최저)
-    2: "140px",
-    3: "180px"   // 3등(가장 높게)
-  };
-  const worstColorMap = {
-    1: "#ffdce0", // 1등
-    2: "#ffe6e9", // 2등
-    3: "#fff0f2"  // 3등
-  };
-  // 상위/하위 Top3를 위한 트레이스 생성 (아래에서 사용)
-  const top10Trace = {
-    x: bestPodiumOrder.map(item => getVal(item)),
-    y: bestPodiumOrder.map(item => item.ID),
-    type: "bar",
-    orientation: "h",
-    marker: { color: bestPodiumOrder.map((_, i) => reds[reds.length - 1 - i] || "#FEEAEA") }
-  };
-
-  const bottom10Trace = {
-    x: worstPodiumOrder.map(item => getVal(item)),
-    y: worstPodiumOrder.map(item => item.ID),
-    type: "bar",
-    orientation: "h",
-    marker: { color: worstPodiumOrder.map((_, i) => blues[i] || "#4567A9") }
-  };
-
-  const topTitle = lastMonthCol
-    ? `${lastMonthCol} 월 매출 상위 3개 ID`
-    : "상위 3개";
-  const bottomTitle = lastMonthCol
-    ? `${lastMonthCol} 월 매출 하위 3개 ID`
-    : "하위 3개";
-
-  // (급상승 품목) CSS
-  const itemStyle = {
-    width: "200px",
-    height: "100px",
-    display: "inline-flex",
-    justifyContent: "center",
-    alignItems: "center",
-    fontSize: "14px",
-    fontWeight: "bold",
-    color: "#fff",
-    background: "linear-gradient(135deg, #FF6B6B 0%, #FFA07A 100%)",
-    borderRadius: "15px",
-    boxShadow: `
-      0 20px 25px -5px rgba(255, 107, 107, 0.35),
-      0 15px 15px -8px rgba(255, 160, 122, 0.25),
-      0 8px 12px rgba(0,0,0,0.15),
-      inset 0 -4px 8px rgba(0,0,0,0.2),
-      inset 0 4px 8px rgba(255,255,255,0.3),
-      inset 2px 0 4px rgba(255,255,255,0.1),
-      inset -2px 0 4px rgba(0,0,0,0.1)
-    `,
-    transform: `
-      translateY(-4px)
-      perspective(1000px)
-      rotateX(2deg)
-    `,
-    border: "1px solid rgba(255,255,255,0.3)",
-    transition: "all 0.3s ease",
-    marginRight: "15px",
-    textShadow: "0 2px 4px rgba(0,0,0,0.2)",
-    position: "relative",
-    overflow: "hidden",
-    backfaceVisibility: "hidden",
-    transformStyle: "preserve-3d",
-    whiteSpace: "pre-wrap",
-    wordBreak: "break-word",
-    padding: "10px",
-    textAlign: "center",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center"
-  };
-
-  // CSS 키프레임
-  const styles = `
-    @keyframes shine {
-      0% { left: -100%; }
-      20% { left: 100%; }
-      100% { left: 100%; }
-    }
-  `;
-  document.head.appendChild(document.createElement('style')).textContent = styles;
-
-  ////////////////////////////////////////
   // 렌더링
   ////////////////////////////////////////
   const [selectedPeriod, setPeriod] = useState("일간");
   const [topSalesItems, setTopSalesItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 데이터 페칭 최적화
+  // 데이터 페칭 최적화 (top-sales-items)
   useEffect(() => {
     const fetchTopSales = async () => {
       try {
         setIsLoading(true);
         const response = await axios.get(`${API_BASE}/api/top-sales-items`);
-        // 데이터가 있을 때만 상태 업데이트
         if (response.data && Array.isArray(response.data)) {
           setTopSalesItems(response.data);
         }
@@ -747,16 +584,15 @@ function DashPage() {
     fetchTopSales();
   }, []); // 의존성 배열 비움
 
-  // TopSalesItem 컴포넌트 수정
+  // TopSalesItem 컴포넌트 (기존 코드 그대로 사용)
   const MemoizedTopSalesItem = useMemo(() => React.memo(({ item }) => {
     const isPositive = item.change_rate >= 0;
-    
-    // 그래프 데이터를 컴포넌트 마운트 시 한 번만 생성
+
     const graphData = useMemo(() => ({
       data: [{
         y: Array.from({ length: 20 }, (_, i) => {
           const trend = item.change_rate >= 0 ? 1 : -1;
-          return 50 + trend * (Math.random() * 15 + Math.sin(i/3) * 10 + i * 2);
+          return 50 + trend * (Math.random() * 15 + Math.sin(i / 3) * 10 + i * 2);
         }),
         type: 'scatter',
         mode: 'lines',
@@ -777,11 +613,11 @@ function DashPage() {
         xaxis: { visible: false, showgrid: false },
         yaxis: { visible: false, showgrid: false }
       },
-      config: { 
+      config: {
         displayModeBar: false,
         responsive: true
       }
-    }), [item.change_rate, isPositive]); // 의존성 배열에 필요한 값만 포함
+    }), [item.change_rate, isPositive]);
 
     return (
       <div style={{
@@ -797,8 +633,8 @@ function DashPage() {
         height: '140px'
       }}>
         <div style={{ flex: 1 }}>
-          <div style={{ 
-            fontWeight: '600', 
+          <div style={{
+            fontWeight: '600',
             fontSize: '18px',
             marginBottom: '12px',
             color: '#2c3e50'
@@ -813,17 +649,17 @@ function DashPage() {
             alignItems: 'center',
             gap: '4px'
           }}>
-            {isPositive ? '↑' : '↓'} 
+            {isPositive ? '↑' : '↓'}
             {Math.abs(item.change_rate).toFixed(1)}%
           </div>
         </div>
         <div style={{ width: '150px', height: '80px' }}>
           <Suspense fallback={
-            <div style={{ 
-              width: '100%', 
-              height: '100%', 
-              display: 'flex', 
-              alignItems: 'center', 
+            <div style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: '#f8f9fa',
               borderRadius: '8px'
@@ -836,7 +672,7 @@ function DashPage() {
         </div>
       </div>
     );
-  }), []); // MemoizedTopSalesItem의 의존성 배열은 비워둠
+  }), []);
 
   // TopSalesItems를 감싸는 컨테이너 스타일
   const TOP_SALES_CONTAINER_STYLE = {
@@ -847,8 +683,8 @@ function DashPage() {
     flexWrap: "nowrap",
     gap: "15px",
     overflowX: "auto",
-    width: "100%",  // 전체 너비 사용
-    padding: "15px 0"  // 좌우 패딩 제거
+    width: "100%",
+    padding: "15px 0"
   };
 
   // 매출 그래프와 트렌드 리스트를 감싸는 컨테이너 스타일 수정
@@ -874,7 +710,7 @@ function DashPage() {
         gap: "15px"
       }}>
         {[
-          { title: "연간 매출", value: kpis.annual_sales, diff: 0 }, // 연간 매출은 증감률 없음
+          { title: "연간 매출", value: kpis.annual_sales, diff: 0 },
           { title: "일간 매출", value: dailyVals.current, diff: dailyDiffPct },
           { title: "주간 매출", value: monthlyVals.current, diff: monthlyDiffPct },
           { title: "월간 매출", value: weeklyVals.current, diff: weeklyDiffPct }
@@ -887,7 +723,6 @@ function DashPage() {
             width: "calc(25% - 15px)",
             minWidth: "200px"
           }}>
-            {/* 타이틀 */}
             <h3 style={{
               fontSize: "12px",
               fontWeight: "bold",
@@ -898,14 +733,11 @@ function DashPage() {
             }}>
               {title}
             </h3>
-
-            {/* KPI 값 + 증감율을 한 줄에 배치 */}
             <div style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between"
             }}>
-              {/* KPI 값 */}
               <h2 style={{
                 fontSize: "24px",
                 fontWeight: "bold",
@@ -913,8 +745,6 @@ function DashPage() {
               }}>
                 {formatCurrency(value)}
               </h2>
-
-              {/* 증감률 표시 (연간 매출 제외) */}
               {diff !== null && (
                 <p style={{
                   fontSize: "12px",
@@ -935,20 +765,17 @@ function DashPage() {
         <h2 style={TITLE_STYLE}>최근 3개월 최다 매출 상품</h2>
         <div style={TOP_SALES_CONTAINER_STYLE}>
           {!isLoading && topSalesItems.map((item, index) => (
-            <MemoizedTopSalesItem 
-              key={item.id || index} 
-              item={item} 
+            <MemoizedTopSalesItem
+              key={item.id || index}
+              item={item}
             />
           ))}
         </div>
       </div>
-      {/*
-        (1) 일간/주간/월간 KPI 카드 3개
-        (2) 오른쪽에 "Trend-list" 박스
-        => 둘 다 BOX_CONTAINER_STYLE
-      */}
+
+
+      {/* (일간/주간/월간 KPI 카드와 Trend-list 영역) */}
       <div style={GRAPH_SECTION_STYLE}>
-        {/* 왼쪽: 통합 KPI 카드 */}
         <div style={{
           ...KPI_CARD_CONTAINER_STYLE,
           width: "70%",
@@ -958,7 +785,6 @@ function DashPage() {
           flexDirection: "column",
           position: "relative"
         }}>
-          {/* 기간 선택 버튼 컨테이너 */}
           <div style={{
             display: "flex",
             gap: "15px",
@@ -992,41 +818,10 @@ function DashPage() {
                   fontWeight: period === selectedPeriod ? "600" : "500",
                   fontSize: "14px",
                   letterSpacing: "0.5px",
-                  boxShadow: period === selectedPeriod
-                    ? "0 8px 16px rgba(80, 87, 100, 0.15)"
-                    : "0 4px 12px rgba(0, 0, 0, 0.03)",
-                  transform: period === selectedPeriod
-                    ? "translateY(-1px)"
-                    : "translateY(0)",
-                  position: "relative",
-                  overflow: "hidden",
                   minWidth: "110px",
                   border: period === selectedPeriod
                     ? "none"
-                    : "1px solid rgba(80, 87, 100, 0.12)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontFamily: "'Pretendard', sans-serif",
-                  WebkitFontSmoothing: "antialiased",
-                  MozOsxFontSmoothing: "grayscale",
-                  "&:hover": {
-                    transform: period === selectedPeriod
-                      ? "translateY(-1px)"
-                      : "translateY(-1px)",
-                    boxShadow: period === selectedPeriod
-                      ? "0 10px 20px rgba(80, 87, 100, 0.2)"
-                      : "0 6px 16px rgba(0, 0, 0, 0.06)",
-                    background: period === selectedPeriod
-                      ? "linear-gradient(145deg, #576171, #6E7A8A)"
-                      : "rgba(255, 255, 255, 1)",
-                  },
-                  "&:active": {
-                    transform: "translateY(0)",
-                    boxShadow: period === selectedPeriod
-                      ? "0 5px 10px rgba(80, 87, 100, 0.1)"
-                      : "0 2px 8px rgba(0, 0, 0, 0.04)",
-                  }
+                    : "1px solid rgba(80, 87, 100, 0.12)"
                 }}
               >
                 {period}
@@ -1035,8 +830,6 @@ function DashPage() {
           </div>
 
           <div style={KPI_CARD_TITLE_STYLE}>매출 현황</div>
-
-          {/* 선택된 기간에 따른 KPI 값 표시 */}
           <h2 style={KPI_MAIN_VALUE_STYLE}>
             {formatCurrency(
               selectedPeriod === "일간" ? dailyVals.current :
@@ -1044,8 +837,6 @@ function DashPage() {
                   monthlyVals.current
             )}
           </h2>
-
-          {/* 증감률 표시 */}
           <div style={KPI_DIFF_CONTAINER_STYLE}>
             <span style={KPI_DIFF_PERCENT_STYLE(
               selectedPeriod === "일간" ? dailyDiff >= 0 :
@@ -1067,8 +858,6 @@ function DashPage() {
                 }`}
             </span>
           </div>
-
-          {/* 그래프 */}
           <div style={{
             ...KPI_GRAPH_WRAPPER_STYLE,
             flex: 1,
@@ -1120,7 +909,6 @@ function DashPage() {
           </div>
         </div>
 
-        {/* 오른쪽: Trend-list (Watchlist) */}
         <div style={WATCHLIST_CONTAINER_STYLE}>
           <div style={WATCHLIST_HEADER_STYLE}>
             <div style={WATCHLIST_TITLE_STYLE}>Trend-list</div>
@@ -1133,122 +921,84 @@ function DashPage() {
         </div>
       </div>
 
-      {/* Best Top 3 & Worst Top 3 중앙 정렬 */}
-      <div style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        gap: "40px",
-        marginTop: "20px"
-      }}>
-        {/* Best Top 3 */}
-        <div style={{
-          ...SECTION_STYLE,
-          flex: 1,
-          maxWidth: "500px",
-          height: "400px",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center"
-        }}>
-          <h2 style={TITLE_STYLE}>매출 Best Top 3 🏆</h2>
-          <div style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "flex-end",
-            gap: "20px"
-          }}>
-            {bestPodiumOrder.map((item, idx) => {
-              const rank = idx === 0 ? 2 : idx === 1 ? 1 : 3;
-              return (
-                <div key={item.ID} style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "flex-end",
-                  width: "80px",
-                  height: bestHeightMap[rank],
-                  backgroundColor: bestColorMap[rank],
-                  borderRadius: "10px",
-                  padding: "10px",
-                  boxShadow: rank === 1
-                    ? "0 0 10px rgba(255,215,0,0.7)"
-                    : "0 4px 10px rgba(0, 0, 0, 0.1)"
-                }}>
-                  <div style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "5px" }}>
-                    {item.ID}
-                  </div>
-                  <div style={{ fontSize: "14px", color: "#333", marginBottom: "5px" }}>
-                    {formatCurrency(getVal(item))}
-                  </div>
-                  <div style={{
-                    fontSize: "14px",
-                    fontWeight: rank === 1 ? "bold" : "normal",
-                    color: rank === 1 ? "#D17A00" : "#666"
-                  }}>
-                    {rank}등
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+      {/* 판매수량 상위 10개 품목 - 카드 형태로 변경 */}
+      <div style={{ width: "84%", margin: "20px auto" }}>
+        <h2 style={TITLE_STYLE}>판매수량 상위 10개 품목</h2>
 
-        {/* Worst Top 3 */}
         <div style={{
-          ...SECTION_STYLE,
-          flex: 1,
-          maxWidth: "500px",
-          height: "400px",
           display: "flex",
           flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center"
+          borderRadius: "12px",
+          padding: "20px",
+          backgroundColor: "#fff",
+          boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.1)"
         }}>
-          <h2 style={TITLE_STYLE}>매출 Worst Top 3 😭</h2>
-          <div style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "flex-end",
-            gap: "20px"
-          }}>
-            {worstPodiumOrder.map((item, idx) => {
-              const rank = idx === 0 ? 2 : idx === 1 ? 1 : 3;
-              return (
-                <div key={item.ID} style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "flex-end",
-                  width: "80px",
-                  height: worstHeightMap[rank],
-                  backgroundColor: worstColorMap[rank],
-                  borderRadius: "10px",
-                  padding: "10px",
-                  boxShadow: rank === 1
-                    ? "0 0 10px rgba(255,0,0,0.3)"
-                    : "0 4px 10px rgba(0, 0, 0, 0.1)"
-                }}>
-                  <div style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "5px" }}>
-                    {item.ID}
-                  </div>
-                  <div style={{ fontSize: "14px", color: "#333", marginBottom: "5px" }}>
-                    {formatCurrency(getVal(item))}
-                  </div>
-                  <div style={{
+          {top10.map((item, index) => {
+            // 순위별 스타일 적용
+            let rankText = `${index + 1}th`;
+            let rankColor = "#888"; // 기본 회색
+
+            if (index === 0) {
+              rankText = "🥇 1st"; // 1등
+              rankColor = "#FFD700"; // 금색
+            } else if (index === 1) {
+              rankText = "🥈 2nd"; // 2등
+              rankColor = "#C0C0C0"; // 은색
+            } else if (index === 2) {
+              rankText = "🥉 3rd"; // 3등
+              rankColor = "#CD7F32"; // 동색
+            }
+
+            return (
+              <div key={item.ID} style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                backgroundColor: "#f8f9fa",
+                borderRadius: "10px",
+                padding: "15px 20px",
+                marginBottom: "10px",
+                color: "#333",
+                boxShadow: "0px 2px 6px rgba(0,0,0,0.1)"
+              }}>
+                {/* 순위 및 카드 내용 */}
+                <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
+                  <span style={{
+                    backgroundColor: rankColor,
+                    padding: "6px 12px",
+                    borderRadius: "15px",
+                    color: "#FFF",
                     fontSize: "14px",
-                    fontWeight: rank === 1 ? "bold" : "normal",
-                    color: rank === 1 ? "#C40000" : "#666"
+                    fontWeight: "bold"
                   }}>
-                    {rank}등
+                    {rankText}
+                  </span>
+                  <div>
+                    <div style={{ fontSize: "18px", fontWeight: "bold" }}>
+                      {item.Sub3 || "미분류"}
+                    </div>
+                    <div style={{ fontSize: "14px", color: "#555" }}>
+                      상품 ID: {item.ID}
+                    </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+
+                {/* 판매수량 및 날짜 */}
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: "18px", fontWeight: "bold", color: "#333" }}>
+                    {item.총판매수량.toLocaleString()}개
+                  </div>
+                  <div style={{ fontSize: "14px", color: "#666" }}>
+                    Mar 28, 2023
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
+
+
     </div>
   );
 }
