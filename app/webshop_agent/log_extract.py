@@ -1,5 +1,5 @@
-import re
 import json
+
 """
 로그에서 action 부분만을 추출하는 함수
 """
@@ -24,7 +24,7 @@ def split_by_reset(log_list):
     
     return result
 
-with open(log_path, 'r') as file:
+with open(log_path) as file:
     log_data = file.read()  # 파일 전체 내용 읽기
     lines = log_data.split('\n')
     output_lines = [line.split('>')[1].strip() for line in lines if '>' in line]

@@ -1,0 +1,5 @@
+{
+  "devDependencies": {
+    "webpack-manifest-plugin": "^5.0.0"
+  }
+}

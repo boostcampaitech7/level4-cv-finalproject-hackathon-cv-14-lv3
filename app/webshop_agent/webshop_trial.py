@@ -1,14 +1,12 @@
 import os
-import sys
-import openai
-from openai import OpenAI
+from typing import Any
+
 import requests
 from bs4 import BeautifulSoup
 from bs4.element import Comment
-from env_history import EnvironmentHistory
 from dotenv import load_dotenv
-
-from typing import Any, Dict, List, Tuple
+from env_history import EnvironmentHistory
+from openai import OpenAI
 
 # Load environment variables at the start
 load_dotenv()
@@ -25,7 +23,7 @@ ACTION_TO_TEMPLATE = {
     'Reviews': 'review_page.html',
     'Attributes': 'attributes_page.html',
 }
-with open("webshop_agent/base_prompt.txt", 'r') as f:
+with open("webshop_agent/base_prompt.txt") as f:
     BASE_PROMPT = f.read()
 
 def llm(prompt, stop=["\n"]):
@@ -48,6 +46,7 @@ def llm(prompt, stop=["\n"]):
                 return text.strip()
             cur_try += 1
         return ""
+
     except Exception as e:
         # print(f"Buy 0 Fail: {e}")
         # import sys
@@ -199,7 +198,7 @@ class webshopEnv:
                     assert 'option_types' in self.sessions[session]
                     assert button in self.sessions[session]['option_types'], (button, self.sessions[session]['option_types'])  # must be options
                     option_type = self.sessions[session]['option_types'][button]
-                    if not 'options' in self.sessions[session]:
+                    if 'options' not in self.sessions[session]:
                         self.sessions[session]['options'] = {}
                     self.sessions[session]['options'][option_type] = button
                     observation_ = f'You have clicked {button}.'
@@ -212,7 +211,7 @@ class webshopEnv:
         reward = info.get('reward', 0.0)
         return observation, reward, done
 
-def webshop_run(idx, env, base_prompt, to_print=True, run_http=False, item = "") -> Tuple[EnvironmentHistory, bool]: # memory: List[str],
+def webshop_run(idx, env, base_prompt, to_print=True, run_http=False, item = "") -> tuple[EnvironmentHistory, bool]: # memory: List[str],
     action = 'reset'
     init_prompt = "You run in a loop of Action, Observation..\n **IMPORTANT**: 1. Never include Observation in your answer! 2. Complete the action answer one by one \n" + base_prompt
     prompt = ''
@@ -268,10 +267,10 @@ def run_trial(
         trial_log_path: str,
         world_log_path: str,
         trial_idx: int,
-        env_configs: List[Dict[str, Any]],
+        env_configs: list[dict[str, Any]],
         run_http : bool = False,
         item_string : str = "",
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
     env = webshopEnv()
 
     num_successes: int = 0
@@ -307,7 +306,7 @@ def run_trial(
 
             # log env results to trial log
             with open(trial_log_path, 'a') as wf:
-                wf.write(f'\n#####\n\nEnvironment #{z}:\n{str(final_env_history)}\n\nSTATUS: {"OK" if is_success else "FAIL"}\n\n#####\n')
+                wf.write(f'\n#####\n\nEnvironment #{z}:\n{final_env_history!s}\n\nSTATUS: {"OK" if is_success else "FAIL"}\n\n#####\n')
 
         except AssertionError:
             status_str: str = f'Environment #{z} Trial #{trial_idx}: FAIL({reward})'
