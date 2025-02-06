@@ -3,6 +3,7 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { MessageSquare, BarChart2, Package } from 'lucide-react';
 import ChatPage from './ChatPage';
 import DashPage from './DashPage';
+import InventoryPage from './InventoryPage';
 
 const Layout = () => {
     // 페이지 네비게이션 hook
@@ -55,7 +56,7 @@ const Layout = () => {
             <Routes>
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/dashboard" element={<DashPage />} />
-            <Route path="/inventory" />
+            <Route path="/inventory" element={<InventoryPage/>}/>
             <Route path="/" element={<ChatPage />} />
             </Routes>
         </div>

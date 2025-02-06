@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 from datetime import datetime
@@ -84,7 +84,7 @@ def load_sales_data():
         # 절대 경로 사용
         db_path = os.path.join(os.path.dirname(__file__), "../database/database.db")
         conn = sqlite3.connect(db_path)
-
+        
         # id를 정수로 가져오도록 쿼리 수정
         df = pd.read_sql_query("SELECT CAST(id AS INTEGER) as id, date, value FROM daily_sales_data", conn)
         conn.close()
@@ -109,14 +109,14 @@ def load_quantity_data():
         # 절대 경로 사용
         db_path = os.path.join(os.path.dirname(__file__), "../database/database.db")
         conn = sqlite3.connect(db_path)
-
+        
         # id를 정수로 가져오도록 쿼리 수정
         df = pd.read_sql_query("SELECT CAST(id AS INTEGER) as id, date, value FROM daily_data", conn)
         conn.close()
-
+        
         # 열 이름을 소문자로 변환
         df.columns = df.columns.str.lower()
-
+        
         if "date" in df.columns:
             df["date"] = pd.to_datetime(df["date"], errors="coerce")
         return df
@@ -157,11 +157,11 @@ if '소분류' not in df_sales.columns or '대분류' not in df_sales.columns:
     df_product_info = pd.DataFrame(product_info_response.data)
     # 필요한 컬럼명을 변경합니다.
     df_product_info = df_product_info.rename(columns={"sub1": "대분류", "sub3": "소분류"})
-
+    
     # id 컬럼을 문자열로 변환
     df_sales['id'] = df_sales['id'].astype(str)
     df_product_info['id'] = df_product_info['id'].astype(str)
-
+    
     # df_sales에 product_info를 id를 기준으로 병합 (left join)
     df_sales = df_sales.merge(df_product_info[["id", "대분류", "소분류"]], on="id", how="left")
 
@@ -324,38 +324,41 @@ def get_rising_subcategories():
         "subcat_list": list(subcat_list)  # 넘파이 Index -> list
     }
 
-# (수정) 판매수량 상위 10개 품목 반환 엔드포인트
+# (추가) 상·하위 10개 품목
 @app.get("/api/topbottom")
 def get_topbottom():
-    try:
-        # df_quantity는 이미 전역 변수로 로드되어 있음 (컬럼: id, date, 판매수량)
-        # 전체 판매수량을 제품별로 집계
-        sales_qty_total = df_quantity.groupby('id', as_index=False)['판매수량'].sum()
-
-        # 판매수량 상위 10개 품목 선택
-        top_10_df = sales_qty_total.nlargest(10, '판매수량').copy()
-        top_10_df['id'] = top_10_df['id'].astype(str)
-        top_10_df = top_10_df.rename(columns={'id': 'ID', '판매수량': '총판매수량'})
-
-        # Supabase에서 product_info 데이터 (예: 제품명 또는 sub3 정보를 가져옴)
-        response = supabase.table('product_info').select("id, sub3").execute()
+    if last_month_col:
+        # Supabase에서 product_info 데이터 가져오기
+        response = supabase.table('product_info').select("id", "sub3").execute()
         product_info = pd.DataFrame(response.data)
+
+        # ID 컬럼을 문자열로 변환
         product_info['id'] = product_info['id'].astype(str)
         product_info = product_info.rename(columns={'id': 'ID', 'sub3': 'Sub3'})
 
-        # 집계 데이터와 product_info를 병합 (제품명 등 추가 정보 포함)
+        # top 10
+        top_10_df = result.nlargest(10, last_month_col, keep='all').copy()
+        top_10_df = top_10_df.rename(columns={'id': 'ID'})
+        top_10_df['ID'] = top_10_df['ID'].astype(str)
         top_10_df = pd.merge(top_10_df, product_info, on='ID', how='left')
+        top_10_list = top_10_df.to_dict('records')  # DataFrame을 리스트로 변환
 
-        top_10_list = top_10_df.to_dict('records')
-        return {
-            "top_10": top_10_list
-        }
-    except Exception as e:
-        print(f"Error in get_topbottom: {str(e)}")
-        return {
-            "top_10": [],
-            "error": str(e)
-        }
+        # bottom 10
+        non_zero_values = result[result[last_month_col] != 0]
+        bottom_10_df = non_zero_values.nsmallest(10, last_month_col).copy()
+        bottom_10_df = bottom_10_df.rename(columns={'id': 'ID'})
+        bottom_10_df['ID'] = bottom_10_df['ID'].astype(str)
+        bottom_10_df = pd.merge(bottom_10_df, product_info, on='ID', how='left')
+        bottom_10_list = bottom_10_df.to_dict('records')  # DataFrame을 리스트로 변환
+    else:
+        top_10_list = []
+        bottom_10_list = []
+
+    return {
+        "top_10": top_10_list,
+        "bottom_10": bottom_10_list,
+        "last_month_col": last_month_col
+    }
 
 # 챗봇용 데이터 미리 준비
 def prepare_chat_data():
@@ -563,76 +566,180 @@ async def chat_with_trend(message: dict):
             "status": "error",
             "error": f"서버 오류가 발생했습니다: {str(e)}"
         }
+        
 
-@app.get("/api/top-sales-items")
-def get_top_sales_items():
+@app.get("/api/inventory")
+def get_inventory(sort: str = "asc", main: str = None, sub1: str = None, sub2: str = None):
     try:
-        # 전역 변수로 이미 로드된 df_sales 사용
-        global df_sales
+        response = supabase.from_('product_inventory').select("""
+            id, value,
+            product_info (
+                main, sub1, sub2, sub3
+            )
+        """).execute()
 
-        # date 컬럼을 datetime으로 변환
-        df_sales['date'] = pd.to_datetime(df_sales['date'])
+        df_inventory = pd.DataFrame(response.data)
 
-        # 최근 3개월 데이터 필터링
-        latest_date = df_sales['date'].max()
-        three_months_ago = latest_date - pd.DateOffset(months=3)
-        recent_data = df_sales[df_sales['date'] >= three_months_ago]
+        # ✅ `id` 값을 유지하고 문자열로 변환 (프론트와 일관되게 매핑)
+        df_inventory["id"] = df_inventory["id"].astype(str)
 
-        # ID별 총 매출액 계산 및 상위 5개 선택
-        total_sales_by_id = recent_data.groupby(['id', '소분류'])['매출액'].sum().reset_index()
-        top_5 = total_sales_by_id.nlargest(5, '매출액')
+        # ✅ `product_info` 컬럼에서 필요한 값 추출
+        df_inventory["main"] = df_inventory["product_info"].apply(lambda x: x.get("main", None) if isinstance(x, dict) else None)
+        df_inventory["sub1"] = df_inventory["product_info"].apply(lambda x: x.get("sub1", None) if isinstance(x, dict) else None)
+        df_inventory["sub2"] = df_inventory["product_info"].apply(lambda x: x.get("sub2", None) if isinstance(x, dict) else None)
+        df_inventory["sub3"] = df_inventory["product_info"].apply(lambda x: x.get("sub3", None) if isinstance(x, dict) else None)
 
-        # 최근 2일 날짜 구하기
-        prev_date = df_sales[df_sales['date'] < latest_date]['date'].max()
+        # ✅ 불필요한 컬럼 제거 (`product_info`는 원본 JSON이므로 삭제)
+        df_inventory = df_inventory.drop(columns=["product_info"])
+        
+        # ✅ 필터링 적용
+        if main:
+            df_inventory = df_inventory[df_inventory["main"] == main]
+        if sub1:
+            df_inventory = df_inventory[df_inventory["sub1"] == sub1]
+        if sub2:
+            df_inventory = df_inventory[df_inventory["sub2"] == sub2]
 
-        result = []
-        for _, row in top_5.iterrows():
-            item_id = row['id']
-            item_data = df_sales[df_sales['id'] == item_id]
+        # ✅ 재고 수량(value) 기준 정렬
+        df_inventory = df_inventory.sort_values(by=["value"], ascending=(sort == "asc"))
 
-            # 최근 2일 매출액
-            latest_sales = item_data[item_data['date'] == latest_date]['매출액'].sum()
-            prev_sales = item_data[item_data['date'] == prev_date]['매출액'].sum()
-
-            # 증감률 계산
-            change_rate = ((latest_sales - prev_sales) / prev_sales * 100) if prev_sales != 0 else 0
-
-            result.append({
-                "id": item_id,
-                "name": row['소분류'] if pd.notna(row['소분류']) else f"Product {item_id}",
-                "sales": float(latest_sales),
-                "change_rate": float(change_rate)
-            })
-
-        return result if result else []
+        return df_inventory.to_dict(orient="records")
+    
     except Exception as e:
-        print(f"Error in get_top_sales_items: {str(e)}")
-        return []
+        print(f"❌ Error fetching inventory: {e!s}")
+        return {"error": str(e)}
 
-@app.get("/api/daily-top-sales")
-def get_daily_top_sales():
+# ✅ 카테고리 필터 엔드포인트
+@app.get("/api/category_filters")
+def get_category_filters(main: str = None, sub1: str = None, sub2: str = None):
+    """
+    선택된 main, sub1, sub2를 기반으로 가능한 sub1, sub2, sub3 목록 반환
+    """
     try:
-        # 이미 병합된 df_sales 사용 (대분류, 소분류 정보 포함)
-        latest_date = df_sales['date'].max()
-        latest_sales = df_sales[df_sales['date'] == latest_date].copy()
-        
-        # 제품별 매출액 합계 계산 및 상위 7개 선택
-        daily_top_7 = latest_sales.groupby(['id', '대분류', '소분류'], as_index=False)['매출액'].sum()
-        daily_top_7 = daily_top_7.nlargest(7, '매출액')
-        
-        # 결과 포맷팅
-        result = [{
-            'id': str(row['id']),
-            'category': row['대분류'],  # 대분류
-            'subcategory': row['소분류'],  # 소분류
-            'sales': float(row['매출액']),
-            'date': latest_date
-        } for _, row in daily_top_7.iterrows()]
-        
-        return result
+        response = supabase.from_('product_info').select("main, sub1, sub2, sub3").execute()
+        df = pd.DataFrame(response.data)
+
+        filters = {}
+
+        if main and sub1 and sub2:
+            filters["sub3"] = sorted(df[(df["main"] == main) & (df["sub1"] == sub1) & (df["sub2"] == sub2)]["sub3"].dropna().unique().tolist())
+        elif main and sub1:
+            filters["sub2"] = sorted(df[(df["main"] == main) & (df["sub1"] == sub1)]["sub2"].dropna().unique().tolist())
+        elif main:
+            filters["sub1"] = sorted(df[df["main"] == main]["sub1"].dropna().unique().tolist())
+        else:
+            filters["main"] = sorted(df["main"].dropna().unique().tolist())
+
+        return {"status": "success", "filters": filters}
+
     except Exception as e:
-        print(f"Error in get_daily_top_sales: {str(e)}")
-        return []
+        return {"error": str(e)}
+
+
+
+# ✅ 최소 재고 기준(ROP) 계산 (서버 실행 시 한 번만 수행)
+def compute_fixed_reorder_points():
+    try:
+        response = supabase.from_('monthly_sales').select("*").execute()
+        df_sales = pd.DataFrame(response.data)
+
+        if df_sales.empty:
+            return {}
+
+        # ✅ 전체 데이터 기준으로 월 평균 판매량 계산
+        valid_dates = [col for col in df_sales.columns if re.match(r"\d{2}_m\d{2}", col)]
+        df_sales["monthly_avg_sales"] = df_sales[valid_dates].mean(axis=1).fillna(0)
+
+        # ✅ 전체 데이터 기준으로 일 평균 판매량 계산
+        df_sales["daily_avg_sales"] = df_sales["monthly_avg_sales"] / 30
+
+        # ✅ 최소 재고 기준(ROP) 계산: 일 평균 판매량의 2배 + 10
+        df_sales["reorder_point"] = (df_sales["daily_avg_sales"] * 2 + 10).fillna(10)
+
+        # ✅ `id`를 문자열로 변환하여 JSON 직렬화 오류 방지
+        df_sales["id"] = df_sales["id"].astype(str)
+
+        # ✅ 최소 재고 기준을 딕셔너리 형태로 저장
+        reorder_points = df_sales.set_index("id")["reorder_point"].to_dict()
+
+        return reorder_points
+
+    except Exception as e:
+        print(f"❌ 최소 재고 기준 계산 오류: {str(e)}")
+        return {}
+
+# ✅ 서버 실행 시 최초 계산하여 저장
+FIXED_REORDER_POINTS = compute_fixed_reorder_points()
+
+    
+@app.get("/api/reorder_points")
+def get_reorder_points(start: str, end: str):
+    try:
+        response = supabase.from_('monthly_sales').select("*").execute()
+        df_sales = pd.DataFrame(response.data)
+
+        if df_sales.empty:
+            return {"error": "🚨 Supabase에서 데이터를 불러오지 못했습니다."}
+
+        # ✅ 선택한 기간의 월별 판매량 데이터 가져오기
+        valid_dates = [col for col in df_sales.columns if re.match(r"\d{2}_m\d{2}", col)]
+        selected_dates = [col for col in valid_dates if start <= col <= end]
+
+        if not selected_dates:
+            return {"error": "🚨 선택한 기간의 데이터가 없습니다."}
+
+        # ✅ 선택한 기간에 대한 월/일 평균 판매량 계산
+        df_sales["monthly_avg_sales"] = df_sales[selected_dates].mean(axis=1).fillna(0)
+        df_sales["daily_avg_sales"] = df_sales["monthly_avg_sales"] / 30
+
+        # ✅ 최소 재고 기준(ROP)은 서버 시작 시 계산된 값 사용
+        df_sales["reorder_point"] = df_sales["id"].map(lambda x: FIXED_REORDER_POINTS.get(str(x), 10))
+
+        # ✅ ID를 문자열로 변환하여 JSON 직렬화 문제 방지
+        df_sales["id"] = df_sales["id"].astype(str)
+
+        # ✅ 필요한 데이터만 반환
+        reorder_data = df_sales[["id", "monthly_avg_sales", "daily_avg_sales", "reorder_point"]].to_dict(orient="records")
+
+        return reorder_data
+
+    except Exception as e:
+        print(f"❌ ROP 갱신 오류: {str(e)}")
+        return {"error": str(e)}
+    
+# ✅ 자동 주문 완료 리스트 저장
+auto_orders = {}
+
+# ✅ 자동 주문 완료 리스트 저장 API
+@app.post("/api/auto_orders")
+def save_auto_order(order_data: dict):
+    """
+    자동 주문 완료된 상품 목록을 저장하는 엔드포인트
+    order_data 예시:
+    {
+        "order_id": "ORD12345",
+        "items": [
+            {"sub3": "상품A"},
+            {"sub3": "상품B"}
+        ],
+        "order_date": "2024-02-06T12:34:56"
+    }
+    """
+    if not order_data or "items" not in order_data or not order_data["items"]:
+        raise HTTPException(status_code=400, detail="잘못된 데이터 형식입니다.")
+
+    for item in order_data["items"]:
+        sub3 = item["sub3"]
+        auto_orders[sub3] = {"status": "success", "order_date": order_data["order_date"]}
+
+    return {"status": "success", "message": "자동 주문 완료 리스트 저장됨", "order_id": order_data["order_id"]}
+
+# ✅ 자동 주문 완료 리스트 조회 API
+@app.get("/api/auto_orders")
+def get_auto_orders():
+    """저장된 자동 주문 완료 리스트를 반환하는 엔드포인트"""
+    return {"status": "success", "orders": auto_orders}
+
 
 # main
 if __name__ == "__main__":
