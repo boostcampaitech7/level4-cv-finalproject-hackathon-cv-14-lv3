@@ -1,10 +1,9 @@
-from typing import List, Dict
 
 
 class EnvironmentHistory:
-    def __init__(self, base_query: str, start_info, memory: List[str], history: List[Dict[str, str]] = []) -> None:
+    def __init__(self, base_query: str, start_info, memory: list[str], history: list[dict[str, str]] = []) -> None:
         self._cur_query: str = f'{_get_base_query(base_query, start_info, memory)}'
-        self._history: List[Dict[str, str]] = history
+        self._history: list[dict[str, str]] = history
         self._last_action: str = ''
         self._is_exhausted: bool = False
 
@@ -39,7 +38,7 @@ class EnvironmentHistory:
                 s += '\n'
         return s
 
-def _get_base_query(base_query: str, start_info: str, memory: List[str]) -> str:
+def _get_base_query(base_query: str, start_info: str, memory: list[str]) -> str:
     query = base_query
 
     # add memory if it exists

@@ -1,18 +1,13 @@
+import os
+
+import httpx
+import pandas as pd
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import httpx
-from datetime import datetime
-import pandas as pd
-import sqlalchemy
-import re
-from dotenv import load_dotenv
-import os
-import requests
-import json
 from openai import OpenAI
 from supabase import create_client
 from supabase.lib.client_options import ClientOptions
-import time
 
 # 1) FastAPI 앱 생성
 app = FastAPI()
@@ -279,7 +274,7 @@ def get_low_stock():
 
         return merged_low_stock.to_dict(orient="records")
     except Exception as e:
-        print(f"Error in get_low_stock: {str(e)}")
+        print(f"Error in get_low_stock: {e!s}")
         return {"error": str(e)}
 
 @app.get("/api/rising-subcategories")
@@ -481,9 +476,9 @@ async def chat_with_solar(message: dict):
         }
 
     except Exception as e:
-        print(f"Error details: {str(e)}")
+        print(f"Error details: {e!s}")
         return {
-            "response": f"서버 오류가 발생했습니다: {str(e)}",
+            "response": f"서버 오류가 발생했습니다: {e!s}",
             "status": "error",
             "error": str(e)
         }
@@ -526,10 +521,10 @@ async def chat_with_trend(message: dict):
                 }
 
     except Exception as e:
-        print(f"Error in trend-chat: {str(e)}")
+        print(f"Error in trend-chat: {e!s}")
         return {
             "status": "error",
-            "error": f"서버 오류가 발생했습니다: {str(e)}"
+            "error": f"서버 오류가 발생했습니다: {e!s}"
         }
 
 # main
