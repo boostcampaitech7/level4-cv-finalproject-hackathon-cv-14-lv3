@@ -725,42 +725,64 @@ function DashPage() {
   ////////////////////////////////////////
   const [selectedPeriod, setPeriod] = useState("일간");
   const [topSalesItems, setTopSalesItems] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // 최다 매출 상품 데이터만 별도로 빠르게 fetch
+  // 데이터 페칭 최적화
   useEffect(() => {
     const fetchTopSales = async () => {
       try {
-        const response = await axios.get(`${API_BASE}/api/top-sales-items`, {
-          // timeout 설정 및 우선순위 높임
-          timeout: 3000,
-          headers: {
-            'Priority': 'high'
-          }
-        });
-        
-        // 데이터 가공을 최소화
-        const items = response.data.map(item => ({
-          ...item,
-          // 필요한 속성만 추출
-          id: item.id,
-          name: item.name,
-          change_rate: item.change_rate
-        }));
-        
-        setTopSalesItems(items);
+        setIsLoading(true);
+        const response = await axios.get(`${API_BASE}/api/top-sales-items`);
+        // 데이터가 있을 때만 상태 업데이트
+        if (response.data && Array.isArray(response.data)) {
+          setTopSalesItems(response.data);
+        }
       } catch (error) {
         console.error('Error fetching top sales items:', error);
-        setTopSalesItems([]); // 에러 시 빈 배열로 설정
+      } finally {
+        setIsLoading(false);
       }
     };
 
     fetchTopSales();
-  }, []); // 독립적인 useEffect로 분리
+  }, []); // 의존성 배열 비움
 
-  // TopSalesItem 컴포넌트 메모이제이션
+  // TopSalesItem 컴포넌트 수정
   const MemoizedTopSalesItem = useMemo(() => React.memo(({ item }) => {
     const isPositive = item.change_rate >= 0;
     
+    // 그래프 데이터를 컴포넌트 마운트 시 한 번만 생성
+    const graphData = useMemo(() => ({
+      data: [{
+        y: Array.from({ length: 20 }, (_, i) => {
+          const trend = item.change_rate >= 0 ? 1 : -1;
+          return 50 + trend * (Math.random() * 15 + Math.sin(i/3) * 10 + i * 2);
+        }),
+        type: 'scatter',
+        mode: 'lines',
+        fill: 'tonexty',
+        line: {
+          color: isPositive ? '#dc3545' : '#007bff',
+          width: 2,
+          shape: 'spline'
+        },
+        fillcolor: isPositive ? 'rgba(220, 53, 69, 0.1)' : 'rgba(0, 123, 255, 0.1)'
+      }],
+      layout: {
+        width: 150,
+        height: 80,
+        margin: { l: 0, r: 0, t: 0, b: 0 },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        xaxis: { visible: false, showgrid: false },
+        yaxis: { visible: false, showgrid: false }
+      },
+      config: { 
+        displayModeBar: false,
+        responsive: true
+      }
+    }), [item.change_rate, isPositive]); // 의존성 배열에 필요한 값만 포함
+
     return (
       <div style={{
         display: 'flex',
@@ -809,38 +831,12 @@ function DashPage() {
               <span>Loading...</span>
             </div>
           }>
-            <LazyPlot 
-              data={[{
-                y: Array.from({ length: 20 }, (_, i) => {
-                  const trend = item.change_rate >= 0 ? 1 : -1;
-                  return 50 + trend * (Math.random() * 15 + Math.sin(i/3) * 10 + i * 2);
-                }),
-                type: 'scatter',
-                mode: 'lines',
-                fill: 'tonexty',
-                line: {
-                  color: isPositive ? '#dc3545' : '#007bff',
-                  width: 2,
-                  shape: 'spline'
-                },
-                fillcolor: isPositive ? 'rgba(220, 53, 69, 0.1)' : 'rgba(0, 123, 255, 0.1)'
-              }]}
-              layout={{
-                width: 150,
-                height: 80,
-                margin: { l: 0, r: 0, t: 0, b: 0 },
-                paper_bgcolor: 'rgba(0,0,0,0)',
-                plot_bgcolor: 'rgba(0,0,0,0)',
-                xaxis: { visible: false, showgrid: false },
-                yaxis: { visible: false, showgrid: false }
-              }}
-              config={{ displayModeBar: false }}
-            />
+            <LazyPlot {...graphData} />
           </Suspense>
         </div>
       </div>
     );
-  }), []);
+  }), []); // MemoizedTopSalesItem의 의존성 배열은 비워둠
 
   // TopSalesItems를 감싸는 컨테이너 스타일
   const TOP_SALES_CONTAINER_STYLE = {
@@ -938,7 +934,7 @@ function DashPage() {
       <div style={KPI_ALL_STYLE}>
         <h2 style={TITLE_STYLE}>최근 3개월 최다 매출 상품</h2>
         <div style={TOP_SALES_CONTAINER_STYLE}>
-          {topSalesItems.map((item, index) => (
+          {!isLoading && topSalesItems.map((item, index) => (
             <MemoizedTopSalesItem 
               key={item.id || index} 
               item={item} 
