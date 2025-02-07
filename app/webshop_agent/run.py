@@ -1,9 +1,10 @@
 import os
 import json
 import argparse
+import os
+from typing import Any
 
 from webshop_trial import run_trial
-from generate_reflections import update_memory
 
 from typing import Any, List, Dict
 
@@ -53,7 +54,7 @@ def main(args) -> None:
             num_envs = args.num_envs
 
         # initialize environment configs
-        env_configs: List[Dict[str, Any]] = []
+        env_configs: list[dict[str, Any]] = []
         for i in range(num_envs):
             env_configs += [{
                 'name': f'env_{i}',
