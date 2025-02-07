@@ -13,8 +13,6 @@ from pydantic import BaseModel
 EMBEDDINGS_DIR = Path(__file__).parent.parent / "database"
 sys.path.append(str(EMBEDDINGS_DIR))
 
-from category_search import HierarchicalCategorySearch  # noqa: E402
-
 # Load environment variables from the embeddings directory
 ENV_PATH = EMBEDDINGS_DIR / ".env"
 load_dotenv(ENV_PATH)
@@ -27,7 +25,6 @@ app = FastAPI(
 # Initialize category searcher
 url: str = os.getenv("SUPABASE_URL")
 key: str = os.getenv("SUPABASE_KEY")
-searcher = HierarchicalCategorySearch(url, key)
 
 # n8n webhook URL from environment variable
 N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL")
@@ -58,47 +55,6 @@ async def send_to_n8n(data: dict):
                 print(f"Warning: Failed to send data to n8n. Status: {response.status_code}")
     except Exception as e:
         print(f"Warning: Error sending data to n8n: {e!s}")
-
-
-@app.post("/process-batch")
-async def process_batch(batch: BatchProductInput):
-    """
-    배치 단위로 상품을 처리하고 결과를 n8n으로 전송하는 엔드포인트
-
-    Request body example:
-    {
-    "results": [
-        {
-        "input_text": "Cheese burger",
-        "categories": {
-            "main": "Grocery & Gourmet Food",
-            "sub1": "Fresh Produce",
-            "sub2": "Baking",
-            "sub3": "Bread Baking"
-        }}]}
-    """
-    try:
-        results = []
-
-        for product in batch.products:
-            # 카테고리 분류 실행
-            categories = searcher.find_best_category(product.input_text)
-
-            # 필요한 데이터만 포함
-            result = {"input_text": product.input_text, "categories": categories}
-            results.append(result)
-
-        # Prepare data for n8n
-        n8n_data = {"results": results}
-
-        # Attempt to send to n8n webhook (non-blocking)
-        await send_to_n8n(n8n_data)
-
-        # Return response
-        return {"status": "success", "results": results}
-
-    except Exception as err:
-        raise HTTPException(status_code=500, detail=str(err)) from err
 
 async def run_process(command: list[str]):
     """webshop agent 프로세스 실행"""
@@ -158,6 +114,5 @@ def main():
     print(f"Starting server on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)  # S104
 
-
 if __name__ == "__main__":
-    main() 
+    main()
