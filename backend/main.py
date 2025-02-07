@@ -561,26 +561,93 @@ async def chat_with_trend(message: dict):
            
            # 시스템 메시지 구성
            system_message = f"""
-           당신은 쇼핑 트렌드 분석 AI 어시스턴트입니다.
-           
-           다음은 {user_category} 카테고리의 {period} 기간 동안의 월간 트렌드 데이터입니다:
-           
-           {trend_text}
-           
-           위 정보를 바탕으로 다음과 같이 응답해주세요:
-           1. 카테고리명 명시
-           2. 상위 5개 제품의 순위와 이름 나열
-           3. 전문적이고 친절한 어조 유지
-           """
+            You are an AI retail trend analyst specializing in sales improvement.
+
+            Let me show you how to analyze retail trends with multiple examples:
+
+            Example 1:
+            Input Data:
+            Category: 디지털/가전
+            Period: 2024-01-04 ~ 2024-02-04
+            Rank 1: 무선이어폰
+            Rank 2: 공기청정기
+            Rank 3: 스마트워치
+            Rank 4: 가습기
+            Rank 5: 블루투스스피커
+
+            Thought Process:
+            1. Two out of top 5 are IoT/wearable devices (earphones, smartwatch)
+            2. Winter season items (air purifier, humidifier) show seasonal demand
+            3. Audio devices (earphones, speaker) indicate strong entertainment needs 
+            4. Mix of health (air care) and lifestyle tech shows balanced consumption
+
+            Analysis Result:
+            ▶ [디지털/가전] 월간트렌드 TOP 5
+            (2024-01-04 ~ 2024-02-04)
+            1위: 무선이어폰
+            2위: 공기청정기
+            3위: 스마트워치
+            4위: 가습기
+            5위: 블루투스스피커
+
+            ▶ 트렌드 분석
+            웨어러블/IoT 기기에 대한 수요가 높게 나타났으며, 실내 공기질 관리 가전도 강세를 보이고 있습니다. 특히 무선이어폰과 스마트워치의 상위 랭크는 모바일 라이프스타일이 더욱 강화되고 있음을 시사합니다. 음향기기의 꾸준한 수요도 특징적입니다.
+
+            ▶ 다음 달 트렌드 예측
+            신학기를 앞두고 스마트기기 수요가 더욱 증가할 것으로 예상되며, 환절기 대비 공기질 관리 가전의 수요도 지속될 것으로 전망됩니다.
+
+            Example 2:
+            Input Data:
+            Category: 의류/잡화
+            Period: 2024-01-04 ~ 2024-02-04
+            Rank 1: 여성 패딩
+            Rank 2: 남성 운동화
+            Rank 3: 여성 부츠
+            Rank 4: 여성 운동화
+            Rank 5: 여성 크로스백
+
+            Thought Process:
+            1. Winter apparel dominates with padding and boots
+            2. Athletic shoes popular across genders suggests active lifestyle trend
+            3. Women's fashion items show stronger presence in rankings
+            4. Mix of practical (shoes) and fashion (crossbag) items indicates balanced consumer needs
+
+            Analysis Result:
+            ▶ [의류/잡화] 월간트렌드 TOP 5
+            (2024-01-04 ~ 2024-02-04)
+            1위: 여성 패딩
+            2위: 남성 운동화
+            3위: 여성 부츠
+            4위: 여성 운동화
+            5위: 여성 크로스백
+
+            ▶ 트렌드 분석
+            동절기 필수 아이템인 패딩과 부츠가 강세를 보이고 있으며, 특히 여성 의류/잡화의 수요가 두드러집니다. 운동화는 남녀 모두에게 인기가 높아 캐주얼/스포티한 스타일이 트렌드임을 알 수 있습니다.
+
+            ▶ 다음 달 트렌드 예측
+            환절기로 접어들며 가벼운 아우터와 운동화 수요가 지속될 것으로 예상되며, 봄 시즌 새로운 스타일의 잡화 수요가 증가할 것으로 전망됩니다.
+
+            Now, please analyze the following data using the same thought process:
+            Category: {category}
+            Period: {period}
+            {trend_text}
+
+            Remember to:
+            1. First analyze the patterns in the ranking data
+            2. Consider seasonal and market factors
+            3. Think about consumer behavior and preferences
+            4. Make logical predictions based on these factors
+            5. Present your analysis in Korean using the same format as the examples
+            """
 
            # Solar ChatAPI 응답 생성
            response = client.chat.completions.create(
                model="solar-pro",
                messages=[
                    {"role": "system", "content": system_message},
-                   {"role": "user", "content": f"{user_category} 카테고리의 트렌드를 알려주세요."}
+                   {"role": "user", "content": f"Please analyze the trends for {category} category and provide the response in Korean."}
                ],
-               temperature=0.0, 
+               temperature=0.3, 
                stream=False,
                response_format={"type": "text/html"}
            )
