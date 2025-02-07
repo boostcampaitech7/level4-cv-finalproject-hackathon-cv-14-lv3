@@ -47,13 +47,12 @@ def capture_screenshot(driver, url, output_file):
         return False
 
 
-def extract_data(ocr_result):
+CATEGORIES = ["패션 잡화", "화장품 미용", "디지털 가전", "가구 인테리어", "출산 육아", "식품", "스포츠 레저", "생활 건강", "여가 생활 편의"]
+
+
+def extract_data(ocr_result, category_idx):
     current_date = datetime.now().strftime("%y-%m-%d")
     lines = ocr_result["pages"][0]["text"].split("\n")
-    category = next((line.split("인기검색어")[0].strip() for line in lines if "인기검색어" in line), None)
-
-    if not category:
-        return []
 
     valid_products = {}
     for line in lines:
@@ -69,10 +68,12 @@ def extract_data(ocr_result):
                         valid_products[rank] = product
 
     return sorted(
-        [{"category": category, "rank": rank, "product_name": product} for rank, product in valid_products.items()], key=lambda x: x["rank"]
+        [{"category": CATEGORIES[category_idx - 1], "rank": rank, "product_name": product} for rank, product in valid_products.items()],
+        key=lambda x: x["rank"],
     )
 
-def trigger_n8n_webhook():  
+
+def trigger_n8n_webhook():
     # n8n webhook URL
     webhook_url = "http://localhost:5678/webhook/trending"
     try:
@@ -84,12 +85,13 @@ def trigger_n8n_webhook():
     except Exception as e:
         print(f"Error triggering n8n workflow: {e!s}")
 
+
 def save_to_supabase(rankings):
     try:
         if rankings:
             result = supabase.table("trend_product").insert(rankings).execute()
             print(f"Saved {len(rankings)} items")
-            trigger_n8n_webhook() # db 저장 후 n8n workflow trigger
+            trigger_n8n_webhook()  # db 저장 후 n8n workflow trigger
             return result
     except Exception as e:
         print(f"Database error: {e}")
@@ -131,19 +133,18 @@ def main():
     try:
         base_url = os.getenv("BASE_URL")
         for i in tqdm(range(1, 10), desc="Processing"):
-            url = f"{base_url}{i}"
-            output_file = screenshots_dir / f"screenshot_{i:02d}.png"
+        url = f"{base_url}{i}"
+        output_file = screenshots_dir / f"screenshot_{i:02d}.png"
 
-            if capture_screenshot(driver, url, output_file):
-                if i != 0:
-                    result = ocr_image(output_file)
-                    if result:
-                        rankings = extract_data(result)
-                        if rankings:
-                            save_to_supabase(rankings)
-            else:
-                failed_urls.append(url)
-            time.sleep(1)
+        if capture_screenshot(driver, url, output_file):
+            result = ocr_image(output_file)
+            if result:
+                rankings = extract_data(result, i)
+                if rankings:
+                    save_to_supabase(rankings)
+        else:
+            failed_urls.append(url)
+        time.sleep(1)
 
     except Exception as e:
         print(f"Main error: {e}")
