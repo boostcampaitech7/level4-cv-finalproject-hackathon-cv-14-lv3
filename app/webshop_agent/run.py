@@ -36,7 +36,7 @@ def main(args) -> None:
         if not os.path.exists(env_config_path):
             raise ValueError(f"Environment config file `{env_config_path}` does not exist")
         with open(env_config_path) as rf:
-            env_configs: List[Dict[str, Any]] = json.load(rf)
+            env_configs: list[Dict[str, Any]] = json.load(rf)
 
     else:
         # Create the run directory
@@ -93,7 +93,7 @@ def main(args) -> None:
 
         # update memory if needed
         if args.use_memory:
-            env_configs: List[Dict[str, Any]] = update_memory(trial_log_path, env_configs)
+            env_configs: list[Dict[str, Any]] = update_memory(trial_log_path, env_configs)
 
         # log env configs for trial
         with open(trial_env_configs_log_path, 'w') as wf:

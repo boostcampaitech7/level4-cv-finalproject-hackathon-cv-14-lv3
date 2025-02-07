@@ -210,7 +210,7 @@ class webshopEnv:
         reward = info.get('reward', 0.0)
         return observation, reward, done
 
-def webshop_run(idx, env, base_prompt, memory: List[str], to_print=True, run_http=False, item = "") -> Tuple[EnvironmentHistory, bool]:
+def webshop_run(idx, env, base_prompt, memory: list[str], to_print=True, run_http=False, item = "") -> tuple[EnvironmentHistory, bool]:
     action = 'reset'
     system_prompt = "You run in a loop of Action, Observation..\n **IMPORTANT**: 1. Never include Observation in your answer! 2. Complete the action answer one by one! \n"
     init_prompt = system_prompt + base_prompt
@@ -274,7 +274,7 @@ def run_trial(
         trial_log_path: str,
         world_log_path: str,
         trial_idx: int,
-        env_configs: List[Dict[str, Any]],
+        env_configs: list[dict[str, Any]],
         use_memory: bool,
         run_http : bool = False,
         item_string : str = "",
