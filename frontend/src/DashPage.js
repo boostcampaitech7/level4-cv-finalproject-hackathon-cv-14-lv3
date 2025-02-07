@@ -784,7 +784,10 @@ function DashPage() {
     ...SECTION_STYLE,
     display: "flex",
     justifyContent: "space-between",
-    gap: "20px"
+    gap: "20px",
+    width: "95%",  // 전체 너비 설정
+    maxWidth: "2100px",  // 최대 너비 설정
+    margin: "20px auto"  // 중앙 정렬
   };
 
   // 거래 내역 컨테이너 스타일
@@ -795,7 +798,7 @@ function DashPage() {
     maxWidth: "2100px",
     margin: "20px auto",
     gap: "20px",
-    padding: "0",  // 패딩 제거
+    padding: "0",
     boxSizing: "border-box"
   };
 
@@ -944,8 +947,8 @@ function DashPage() {
       <div style={GRAPH_SECTION_STYLE}>
         <div style={{
           ...KPI_CARD_CONTAINER_STYLE,
-          width: "70%",
-          marginRight: "20px",
+          width: "70%",  // 왼쪽 카드 너비
+          marginRight: "10px",  // 오른쪽 마진 제거
           height: "600px",
           display: "flex",
           flexDirection: "column",
@@ -1075,7 +1078,11 @@ function DashPage() {
           </div>
         </div>
 
-        <div style={WATCHLIST_CONTAINER_STYLE}>
+        <div style={{
+          ...WATCHLIST_CONTAINER_STYLE,
+          width: "30%",  // 오른쪽 카드 너비
+          height: "600px"
+        }}>
           <div style={WATCHLIST_HEADER_STYLE}>
             <div style={WATCHLIST_TITLE_STYLE}>Trend-list</div>
           </div>
@@ -1089,14 +1096,15 @@ function DashPage() {
 
       {/* 최하단 섹션 */}
       <div style={TRANSACTIONS_CONTAINER_STYLE}>
-        {/* 왼쪽: 일간 최다 매출 */}
         <div style={{
-          flex: '0 0 calc(70% - 10px)',  // 70%에서 gap의 절반만큼 빼줌
+          flex: '1 1 70%',
           backgroundColor: 'white',
           borderRadius: '16px',
           padding: '20px',
           boxShadow: '0 8px 32px rgba(0,0,0,0.06)',
-          minHeight: '520px'
+          minHeight: '520px',
+          maxWidth: '70%',
+          boxSizing: 'border-box'
         }}>
           <h2 style={{ 
             fontSize: '22px', 
@@ -1185,9 +1193,8 @@ function DashPage() {
           </div>
         </div>
 
-        {/* 오른쪽: 판매수량 순위표 */}
         <div style={{
-          flex: '0 0 calc(30% - 10px)',  // 30%에서 gap의 절반만큼 빼줌
+          flex: '1 1 30%',
           backgroundColor: 'white',
           borderRadius: '16px',
           padding: '20px',
@@ -1195,7 +1202,9 @@ function DashPage() {
           minHeight: showAllItems ? '700px' : '520px',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'space-between'
+          justifyContent: 'space-between',
+          maxWidth: '30%',
+          boxSizing: 'border-box'
         }}>
           <div>
             <h2 style={{ 
