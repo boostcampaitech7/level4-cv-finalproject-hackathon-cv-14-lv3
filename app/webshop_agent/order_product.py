@@ -119,4 +119,4 @@ if len(data_to_insert) != 0:
     if response.data:
         print("데이터 업로드 성공!")
     else:
-        print("업로드 실패:", response)
+        print("업로드 실패:", response) 

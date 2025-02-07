@@ -30,7 +30,7 @@ const InventoryPage = () => {
 
 
   // ✅ WebSocket 연결
-  useEffect(() => {
+  useEffect(() => { 
     const ws = new WebSocket("ws://127.0.0.1:8000/ws/auto_orders");
 
     ws.onmessage = (event) => {
