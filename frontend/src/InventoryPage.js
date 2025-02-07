@@ -128,7 +128,6 @@ const InventoryPage = () => {
     setSelectedSub2(value);
     applyFilters(inventory, searchQuery, selectedMain, selectedSub1, value);
   };
-
   useEffect(() => {
     const initializeData = async () => {
       const categoryData = await fetchCategoryFilters("All", "All", "All");
@@ -268,7 +267,6 @@ const handleResetSort = async () => {
     await fetchInventory(reorderData);
   }
 };
-
 
 
 

@@ -1,31 +1,29 @@
 import os
-import sys
-import openai
-from openai import OpenAI
+from typing import Any
+
 import requests
 from bs4 import BeautifulSoup
 from bs4.element import Comment
-from env_history import EnvironmentHistory
 from dotenv import load_dotenv
-
-from typing import Any, Dict, List, Tuple
+from env_history import EnvironmentHistory
+from openai import OpenAI
 
 # Load environment variables at the start
 load_dotenv()
- 
+
 client = OpenAI(
     api_key=os.getenv("UPSTAGE_API_KEY"),
     base_url="https://api.upstage.ai/v1/solar"
 )
 
-WEBSHOP_URL = "http://172.29.50.176:3000/"
+WEBSHOP_URL = "https://hen-fitting-trout.ngrok-free.app/"
 ACTION_TO_TEMPLATE = {
     'Description': 'description_page.html',
     'Features': 'features_page.html',
     'Reviews': 'review_page.html',
     'Attributes': 'attributes_page.html',
 }
-with open("webshop_agent/base_prompt.txt", 'r') as f:
+with open("webshop_agent/base_prompt.txt") as f:
     BASE_PROMPT = f.read()
 
 def llm(prompt, stop=["\n"]):
@@ -34,7 +32,7 @@ def llm(prompt, stop=["\n"]):
         while cur_try < 6:
             messages= []
             system = "You run in a loop of Action, Observation..\n **IMPORTANT**: 1. Never include Observation in your answer! 2. Answer just one action! \n"
-            messages.append({"role": "system", "content": system}) 
+            messages.append({"role": "system", "content": system})
             messages.append({"role": "user", "content": prompt})
             stream = client.chat.completions.create(
                 model="solar-pro",
@@ -48,10 +46,12 @@ def llm(prompt, stop=["\n"]):
                 return text.strip()
             cur_try += 1
         return ""
+
     except Exception as e:
-        print(prompt)
-        import sys
-        sys.exit(1)
+        # print(f"Buy 0 Fail: {e}")
+        # import sys
+        # sys.exit(1)
+        return ""
 
 def clean_str(p):
   return p.encode().decode("unicode-escape").encode("latin1").decode("utf-8")
@@ -147,7 +147,6 @@ def webshop_text(session, page_type, query_string='', page_num=1, asin='', optio
 class webshopEnv:
     def __init__(self):
         self.sessions = {}
-  
     def step(self, session, action):
         done = False
         observation_ = None
@@ -198,7 +197,7 @@ class webshopEnv:
                     assert 'option_types' in self.sessions[session]
                     assert button in self.sessions[session]['option_types'], (button, self.sessions[session]['option_types'])  # must be options
                     option_type = self.sessions[session]['option_types'][button]
-                    if not 'options' in self.sessions[session]:
+                    if 'options' not in self.sessions[session]:
                         self.sessions[session]['options'] = {}
                     self.sessions[session]['options'][option_type] = button
                     observation_ = f'You have clicked {button}.'
@@ -211,9 +210,10 @@ class webshopEnv:
         reward = info.get('reward', 0.0)
         return observation, reward, done
 
-def webshop_run(idx, env, base_prompt, to_print=True, run_http=False, item = "") -> Tuple[EnvironmentHistory, bool]: # memory: List[str],
+def webshop_run(idx, env, base_prompt, memory: List[str], to_print=True, run_http=False, item = "") -> Tuple[EnvironmentHistory, bool]:
     action = 'reset'
-    init_prompt = "You run in a loop of Action, Observation..\n **IMPORTANT**: 1. Never include Observation in your answer! 2. Complete the action answer one by one \n" + base_prompt
+    system_prompt = "You run in a loop of Action, Observation..\n **IMPORTANT**: 1. Never include Observation in your answer! 2. Complete the action answer one by one! \n"
+    init_prompt = system_prompt + base_prompt
     prompt = ''
 
     res = env.step(idx, action)
@@ -225,13 +225,20 @@ Instruction:
 i am looking for {item}.
 [Search]
 """
-    env_history = EnvironmentHistory(base_prompt, observation, [], [])
+    if len(memory) > 3:
+        env_history = EnvironmentHistory(base_prompt, observation, memory[-3:], [])
+    else:
+        env_history = EnvironmentHistory(base_prompt, observation, memory, [])
     env_history.reset()
     for i in range(15):
-        env_history.add("action", action)
         try:
-            res = env.step(idx, action)
-            observation = res[0]
+            if i:
+                if i == 1:
+                    env_history.add("action", f"\nAction: {action}")
+                else:
+                    env_history.add("action", action)
+                res = env.step(idx, action)
+                observation = res[0]
             if action == 'reset' and run_http==True:
                 observation = f"""
 WebShop
@@ -250,30 +257,32 @@ i am looking for {item}.
         else:
             prompt += f'{observation}\n\nAction:'
 
-        env_history.add("observation", observation)
-        
+        if i:
+            env_history.add("observation", observation)
+
         # if done, check if reward is complete value
         if res[2]:
-            return env_history, res[1] == 1.0
+            return env_history, res[1] == 1.0, res[1]
 
-        action = llm(init_prompt + prompt[-(6400-len(init_prompt)):], stop=['\n']).lstrip(' ')
-        # print("-------------------------------------------------------------------------")
+        action = llm(f"{system_prompt}{env_history}", stop=['\n']).lstrip(' ')
         if i == 14 and res[2] == False:
-            print(f"{idx} Fail")
+            print(f"Buy {idx} Fail: Attempt count exceeded")
 
-    return env_history, False
+    return env_history, False, 0.0
 
 def run_trial(
         trial_log_path: str,
         world_log_path: str,
         trial_idx: int,
         env_configs: List[Dict[str, Any]],
+        use_memory: bool,
         run_http : bool = False,
         item_string : str = "",
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
     env = webshopEnv()
 
     num_successes: int = 0
+    sum_reward: float = 0.0
     num_additional_successes: int = 0
     num_envs: int = len(env_configs)
     if run_http:
@@ -282,6 +291,7 @@ def run_trial(
     for z, env_config in enumerate(env_configs):
         if env_config["is_success"]:
             num_successes += 1
+            sum_reward += 1.0
             # log to world log
             with open(world_log_path, 'a') as wf:
                 wf.write(f'Environment #{z} Trial #{trial_idx}: SUCCESS\n')
@@ -291,27 +301,28 @@ def run_trial(
 
         try:
             if run_http:
-                final_env_history, is_success = webshop_run(f'{z}', env, BASE_PROMPT, to_print=False, run_http=run_http, item = item_list[z]) #  env_config["memory"] if use_memory else [], 
+                final_env_history, is_success, reward = webshop_run(f'{z}', env, BASE_PROMPT, env_config["memory"] if use_memory else [], to_print=False, run_http=run_http, item = item_list[z])
             else:
-                final_env_history, is_success = webshop_run(f'{z}', env, BASE_PROMPT, to_print=False) #  env_config["memory"] if use_memory else [],
+                final_env_history, is_success, reward = webshop_run(f'{z}', env, BASE_PROMPT, env_config["memory"] if use_memory else [], to_print=False)
+            sum_reward += reward
             if is_success:
                 status_str: str = f'Environment #{z} Trial #{trial_idx}: SUCCESS'
                 env_configs[z]["is_success"] = True
                 num_successes += 1
                 num_additional_successes += 1
             else:
-                status_str: str = f'Environment #{z} Trial #{trial_idx}: FAIL'
+                status_str: str = f'Environment #{z} Trial #{trial_idx}: FAIL({reward})'
 
             # log env results to trial log
             with open(trial_log_path, 'a') as wf:
-                wf.write(f'\n#####\n\nEnvironment #{z}:\n{str(final_env_history)}\n\nSTATUS: {"OK" if is_success else "FAIL"}\n\n#####\n')
+                wf.write(f'\n#####\n\nEnvironment #{z}:\n{final_env_history!s}\n\nSTATUS: {"OK" if is_success else "FAIL"}\n\n#####\n')
 
         except AssertionError:
-            status_str: str = f'Environment #{z} Trial #{trial_idx}: FAIL'
+            status_str: str = f'Environment #{z} Trial #{trial_idx}: FAIL({reward})'
 
             # log env results to trial log
             with open(trial_log_path, 'a') as wf:
-                wf.write(f'\n#####\n\nEnvironment #{z}:\nAssertion Error\n\nSTATUS: FAIL\n\n#####\n')
+                wf.write(f'\n#####\n\nEnvironment #{z}:\nAssertion Error\n\nSTATUS: FAIL({reward})\n\n#####\n')
 
         # log to world log
         with open(world_log_path, 'a') as f:
@@ -325,6 +336,7 @@ ADDITIONAL SUCCESS: {num_additional_successes}
 FAIL: {num_envs - num_successes}
 TOTAL: {num_envs}
 ACCURACY: {round(num_successes / num_envs, 2)}
+REWARD ACCURACY: {round(sum_reward / num_envs, 2)}
 -----"""
     with open(trial_log_path, 'a') as wf:
         wf.write(log_str)

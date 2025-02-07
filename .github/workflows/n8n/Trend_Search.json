@@ -1,0 +1,263 @@
+{
+  "name": "Trend-Search",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "c055762a-8fe7-4141-a639-df2372f30060",
+      "typeVersion": 1.1,
+      "name": "Workflow Input Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        1020,
+        1420
+      ]
+    },
+    {
+      "parameters": {
+        "text": "={{ $item(\"0\").$node[\"Workflow Input Trigger\"].json[\"query\"] }}",
+        "schemaType": "manual",
+        "inputSchema": "{\n \"type\": \"object\",\n \"properties\": {\n   \"startDate\": {\n     \"type\": \"string\",\n     \"description\": \"조회 시작 날짜 (YYYY-MM-DD 형식, 2016-01-01부터 가능)\"\n   },\n   \"endDate\": {\n     \"type\": \"string\", \n     \"description\": \"조회 종료 날짜 (YYYY-MM-DD 형식)\"\n   },\n   \"timeUnit\": {\n     \"type\": \"string\",\n     \"enum\": [\"date\", \"week\", \"month\"],\n     \"default\": \"week\",\n     \"description\": \"조회 구간 단위 (date: 일간, week: 주간, month: 월간)\"\n   },\n   \"keywordGroups\": {\n     \"type\": \"array\",\n     \"maxItems\": 5,\n     \"items\": {\n       \"type\": \"object\",\n       \"properties\": {\n         \"groupName\": {\n           \"type\": \"string\",\n           \"description\": \"주제어 그룹명\"\n         },\n         \"keywords\": {\n           \"type\": \"array\",\n           \"maxItems\": 20,\n           \"items\": {\n             \"type\": \"string\"\n           },\n           \"description\": \"검색어 목록\"\n         }\n       },\n       \"required\": [\"groupName\", \"keywords\"]\n     },\n     \"description\": \"검색어 그룹 (최대 5개)\"\n   },\n   \"device\": {\n     \"type\": \"string\",\n     \"enum\": [\"\", \"pc\", \"mo\"],\n     \"default\": \"\",\n     \"description\": \"검색 환경 (pc: PC, mo: 모바일, 빈값: 전체)\"\n   },\n   \"gender\": {\n     \"type\": \"string\", \n     \"enum\": [\"\", \"m\", \"f\"],\n     \"default\": \"\",\n     \"description\": \"성별 (m: 남성, f: 여성, 빈값: 전체)\"\n   },\n   \"ages\": {\n     \"type\": \"array\",\n     \"items\": {\n       \"type\": \"string\",\n       \"enum\": [\"1\", \"2\", \"3\", \"4\", \"5\", \"6\", \"7\", \"8\", \"9\", \"10\", \"11\"]\n     },\n     \"default\": [],\n     \"description\": \"연령대 (1: 0-12세, 2: 13-18세, ... 11: 60세 이상, 빈배열: 전체)\"\n   }\n },\n \"required\": [\"startDate\", \"endDate\", \"timeUnit\", \"keywordGroups\"]\n}",
+        "options": {
+          "systemPromptTemplate": "당신은 전문적인 트렌드 분석 AI 어시스턴트입니다.사용자의 검색 쿼리를 분석하여 Naver DataLab API에 적합한 구조화된 데이터를 생성해야 합니다.{{ $item(\"0\").$node[\"Workflow Input Trigger\"].json[\"query\"] }}카테고리 내에서 5개의 관련 상품을 도출하여 제공해야 하며, 최신 트렌드와 계절성을 반영한 결과를 출력해야 합니다.\n\n키워드 그룹 생성 규칙해당 카테고리 내에서 5개의 개별 상품을 도출하여 keywordGroups의 ‘groupName’과 ‘keywords’를 적절한 상품명을 유추해 같은 값으로 생성합니다.각 상품은 동일한 카테고리 내에서 가장 트렌드한 제품, 계절성을 반영하여 적절한 제품을 포함합니다.\n\n- 무조건 지킬 규칙\n* keywordGroups 내 아이템 조합은 5개 생성합니다.\n* 각 아이템의 ‘groupName’과 ‘keywords’은 같은 이름\n* groupName당 keywords는 무조건 하나\n* 모호한 키워드는 사용 금지\n    * 나쁜 예: \"겨울 간식\", \"트렌드 패션\", \"여자 옷\", \"신발\", \"침대\"\n    * 좋은 예: \"어그부츠\", \"롱패딩\", \"블루투스 이어폰\", \"차량용 공기청정기\", \"리클라이너 침대\"\n\n* 날짜 처리 (YYYY-MM-DD 형식)\n- 날짜 범위는 \"startDate\": \"2025-01-28\",\"endDate\": \"2025-02-01\"로 고정합니다.\n- 시간 단위는 \"week”로 설정합니다."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1,
+      "position": [
+        1220,
+        1420
+      ],
+      "id": "abc92557-bccb-4906-8758-80583b9c7957",
+      "name": "Information Extractor",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://openapi.naver.com/v1/datalab/search",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\n  \"X-Naver-Client-Id\": \"T7I8f00osx33Vc5oA2jZ\",\n  \"X-Naver-Client-Secret\": \"hpPIpgOpfE\",\n  \"Content-Type\": \"application/json\"\n}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.output }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1620,
+        1420
+      ],
+      "id": "e7cb952e-c824-454d-8650-ce7aa6ff6aea",
+      "name": "Naver Datalab API Request"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "output",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1820,
+        1420
+      ],
+      "id": "59b23989-6d1e-4411-842b-b2584e29a3be",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "solar-pro",
+          "mode": "id"
+        },
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1620,
+        1720
+      ],
+      "id": "6df103af-e7b5-4ad7-bd7b-424bfff95147",
+      "name": "\bSolar Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "1NzrEJLMzjNtK0g8",
+          "name": "Solar"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $item(\"0\").$node[\"Aggregate\"].json[\"output\"] }}",
+        "options": {
+          "systemMessage": "당신은 네이버 검색 트렌드 데이터를 해석해 분석결과를 제공하는 어시스턴트입니다.  \n추출된 groupName중 ratio가 100인 상품 즉, 검색량이 가장 많은 상품을 알려주세요."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        2000,
+        1420
+      ],
+      "id": "8dbe4011-5728-4fb7-b6b0-22d909a4c9da",
+      "name": "Trend Agent"
+    },
+    {
+      "parameters": {
+        "tableId": "trend_product",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "product_name",
+              "fieldValue": "={{ $item(\"0\").$node[\"Information Extractor1\"].json[\"output\"][\"trend_object\"] }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2660,
+        1420
+      ],
+      "id": "e99ed401-954e-49c9-9a92-e2d586502386",
+      "name": "Supabase",
+      "credentials": {
+        "supabaseApi": {
+          "id": "2j3yxKXteM2AQtyI",
+          "name": "Supabase account-gorani"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "text": "{{ $item(\"0\").$node[\"Trend Agent\"].json[\"output\"] }}",
+        "schemaType": "manual",
+        "inputSchema": "{\n\t\"type\": \"trend_object\",\n\t\"properties\": {\n\t\t\"state\": {\n\t\t\t\"type\": \"string\"\n\t\t}\n\t}\n}",
+        "options": {
+          "systemPromptTemplate": "주어진 문장에서 가장 검색량이 많았다고 ''안에 추출된 상품을 뽑아서 영어로 바꿔서 'trend_object' type안에 상품이름을 반환해주세요"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1,
+      "position": [
+        2320,
+        1420
+      ],
+      "id": "c1c9156b-3128-4767-9ded-35df3fcd0ceb",
+      "name": "Information Extractor1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Workflow Input Trigger": {
+      "main": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Naver Datalab API Request": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Information Extractor": {
+      "main": [
+        [
+          {
+            "node": "Naver Datalab API Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Trend Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "\bSolar Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Trend Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Information Extractor",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Information Extractor1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trend Agent": {
+      "main": [
+        [
+          {
+            "node": "Information Extractor1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Information Extractor1": {
+      "main": [
+        [
+          {
+            "node": "Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "fd8df13b-24c1-4e47-a688-ca3496d6ab76",
+  "meta": {
+    "templateId": "VMiAxXa3lCAizGB5f7dVZQSFfg3FtHkdTKvLuupqBls=",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2bf14225034dfb2d8498032d805718ab7af6ff6458c61a42e219515f095f1c9f"
+  },
+  "id": "U5l8QpHhXbZW3tic",
+  "tags": []
+}

@@ -16,11 +16,7 @@ import time
 import sqlite3
 from pydantic import BaseModel
 from typing import List
-
-
 import random
-import os
-import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
@@ -272,7 +268,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY, options)
 # OpenAI 클라이언트 초기화
 client = OpenAI(
     api_key=UPSTAGE_API_KEY,
-    base_url="https://api.upstage.ai/v1/solar"
+    base_url=UPSTAGE_API_BASE_URL
 )
 
 # ===== 데이터 로딩 =====
@@ -672,6 +668,75 @@ def prepare_chat_data():
         "inventory_status": inventory_text
     }
 
+# 챗봇용 데이터 미리 준비
+def prepare_chat_data():
+    # 월별 매출 데이터
+    monthly_sales_text = "월별 매출 데이터:\n" + "\n".join([
+        f"{row['월간'].strftime('%Y-%m')}: {row['값']:,}원"
+        for row in monthly_sum_df.to_dict('records')
+    ])
+
+    # 주간 매출 데이터
+    weekly_sales_text = "주간 매출 데이터:\n" + "\n".join([
+        f"{row['주간'].strftime('%Y-%m-%d')}: {row['값']:,}원"
+        for row in weekly_data.tail(12).to_dict('records')
+    ])
+
+    # 일별 매출 데이터
+    daily_sales_text = "최근 30일 일별 매출 데이터:\n" + "\n".join([
+        f"{row['날짜'].strftime('%Y-%m-%d')}: {row['값']:,}원"
+        for row in daily_df.tail(30).to_dict('records')
+    ])
+
+    # 카테고리별 매출 상세
+    category_details = df_sales.groupby('대분류').agg({
+        '매출액': ['sum', 'mean', 'count']
+    }).reset_index()
+    category_details.columns = ['대분류', '총매출', '평균매출', '판매건수']
+
+    category_text = "카테고리별 매출 상세:\n" + "\n".join([
+        f"{row['대분류']}: 총매출 {row['총매출']:,}원, 평균 {row['평균매출']:,.0f}원, {row['판매건수']}건"
+        for _, row in category_details.iterrows()
+    ])
+
+    # 재고 현황 상세
+    inventory_status = pd.merge(
+        inventory_df,
+        daily_sales_quantity_last,
+        on='id',
+        how='left'
+    )
+
+    # product_info 테이블에서 카테고리 정보 가져오기
+    product_info_response = supabase.from_('product_info').select("id,main,sub3").execute()
+    product_info_df = pd.DataFrame(product_info_response.data)
+
+    # 데이터 병합
+    inventory_status = pd.merge(
+        inventory_status,
+        product_info_df,
+        left_on='id',
+        right_on='id',
+        how='left'
+    )
+
+    inventory_status['일판매수량'] = inventory_status['일판매수량'].fillna(0)
+    inventory_status['남은재고'] = inventory_status['재고수량'] - inventory_status['일판매수량']
+
+    inventory_text = "카테고리별 재고 현황:\n" + "\n".join([
+        f"{row['main'] if pd.notna(row['main']) else '미분류'}({row['sub3'] if pd.notna(row['sub3']) else '미분류'}): "
+        f"총재고 {row['재고수량']}개, 일판매량 {row['일판매수량']}개, 남은재고 {row['남은재고']}개"
+        for _, row in inventory_status.iterrows()
+    ])
+
+    return {
+        "monthly_sales": monthly_sales_text,
+        "weekly_sales": weekly_sales_text,
+        "daily_sales": daily_sales_text,
+        "category_details": category_text,
+        "inventory_status": inventory_text
+    }
+
 # 데이터 미리 준비
 CHAT_DATA = prepare_chat_data()
 
@@ -759,126 +824,195 @@ async def chat_with_solar(message: dict):
         }
 
     except Exception as e:
-        print(f"Error details: {str(e)}")
+        print(f"Error details: {e!s}")
         return {
-            "response": f"서버 오류가 발생했습니다: {str(e)}",
+            "response": f"서버 오류가 발생했습니다: {e!s}",
             "status": "error",
             "error": str(e)
         }
 
-@app.post("/api/trend-chat")
-async def chat_with_trend(message: dict):
+@app.get("/api/trend-categories")
+async def get_trend_categories():
     try:
-        # n8n workflow 호출 후 트렌드 분석 응답 받기
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "http://localhost:5678/webhook/trend",
-                json={
-                    "query": "",
-                    "chatInput": message.get("content", "")
-                },
-                timeout=30.0
-            )
-
-            print(f"n8n response status: {response.status_code}")
-            if response.status_code == 200:
-                result = response.json()
-                if "output" not in result:
-                    return {
-                        "response": "n8n workflow에서 올바른 응답을 받지 못했습니다.",
-                        "status": "error"
-                    }
-                return {
-                    "response": result["output"],
-                    "status": "success"
-                }
-            elif response.status_code == 404:
-                return {
-                    "response": "n8n webhook URL을 찾을 수 없습니다.",
-                    "status": "error"
-                }
-            else:
-                return {
-                    "response": f"트렌드 분석 처리 중 오류가 발생했습니다. (Status: {response.status_code})",
-                    "status": "error"
-                }
-
-    except Exception as e:
-        print(f"Error in trend-chat: {str(e)}")
+        # 단순히 trending_product 테이블에서 모든 카테고리 조회
+        response = supabase.table('trend_product')\
+            .select('category')\
+            .execute()
+        
+        # 중복 제거 및 정렬
+        categories = sorted(list(set([item['category'] for item in response.data])))
+        
         return {
-            "status": "error",
-            "error": f"서버 오류가 발생했습니다: {str(e)}"
+            "status": "success",
+            "categories": categories
         }
 
-@app.get("/api/top-sales-items")
-def get_top_sales_items():
-    try:
-        # 전역 변수로 이미 로드된 df_sales 사용
-        global df_sales
-
-        # date 컬럼을 datetime으로 변환
-        df_sales['date'] = pd.to_datetime(df_sales['date'])
-
-        # 최근 3개월 데이터 필터링
-        latest_date = df_sales['date'].max()
-        three_months_ago = latest_date - pd.DateOffset(months=3)
-        recent_data = df_sales[df_sales['date'] >= three_months_ago]
-
-        # ID별 총 매출액 계산 및 상위 5개 선택
-        total_sales_by_id = recent_data.groupby(['id', '소분류'])['매출액'].sum().reset_index()
-        top_5 = total_sales_by_id.nlargest(5, '매출액')
-
-        # 최근 2일 날짜 구하기
-        prev_date = df_sales[df_sales['date'] < latest_date]['date'].max()
-
-        result = []
-        for _, row in top_5.iterrows():
-            item_id = row['id']
-            item_data = df_sales[df_sales['id'] == item_id]
-
-            # 최근 2일 매출액
-            latest_sales = item_data[item_data['date'] == latest_date]['매출액'].sum()
-            prev_sales = item_data[item_data['date'] == prev_date]['매출액'].sum()
-
-            # 증감률 계산
-            change_rate = ((latest_sales - prev_sales) / prev_sales * 100) if prev_sales != 0 else 0
-
-            result.append({
-                "id": item_id,
-                "name": row['소분류'] if pd.notna(row['소분류']) else f"Product {item_id}",
-                "sales": float(latest_sales),
-                "change_rate": float(change_rate)
-            })
-
-        return result if result else []
     except Exception as e:
-        print(f"Error in get_top_sales_items: {str(e)}")
-        return []
+        print(f"Error in trend-chat: {e!s}")
+        return {
+            "status": "error",
+            "error": f"서버 오류가 발생했습니다: {e!s}"
+        }
 
-@app.get("/api/daily-top-sales")
-def get_daily_top_sales():
-    try:
-        # 이미 병합된 df_sales 사용 (대분류, 소분류 정보 포함)
-        latest_date = df_sales['date'].max()
-        latest_sales = df_sales[df_sales['date'] == latest_date].copy()
+@app.post("/api/trend-chat")
+async def chat_with_trend(message: dict):
+   try:
+       # trend_product 테이블에서 모든 데이터 조회
+       response = supabase.table('trend_product')\
+           .select('*')\
+           .order('rank')\
+           .execute()
 
-        # 제품별 매출액 합계 계산 및 상위 7개 선택
-        daily_top_7 = latest_sales.groupby(['id', '대분류', '소분류'], as_index=False)['매출액'].sum()
-        daily_top_7 = daily_top_7.nlargest(7, '매출액')
+       trend_data = response.data
 
-        # 결과 포맷팅
-        result = [{
-            'id': str(row['id']),
-            'category': row['대분류'],  # 대분류
-            'subcategory': row['소분류'],  # 소분류
-            'sales': float(row['매출액']),
-            'date': latest_date
-        } for _, row in daily_top_7.iterrows()]
+       # 트렌드 데이터를 카테고리별로 정리
+       categorized_trends = {}
+       for item in trend_data:
+           category = item['category'].strip()  
+           if category not in categorized_trends:
+               categorized_trends[category] = []
+           categorized_trends[category].append({
+               'rank': item['rank'],
+               'product_name': item['product_name'],
+               'start_date': item['start_date'],
+               'end_date': item['end_date']
+           })
 
-        return result
-    except Exception as e:
-        print(f"Error in get_daily_top_sales: {str(e)}")
-        return []
+       # 사용자 메시지에서 카테고리 확인
+       user_category = message["content"].strip()
+       
+       if user_category in categorized_trends:
+           # 해당 카테고리의 상위 5개 순위 정보 구성
+           trend_info = []
+           category_data = sorted(categorized_trends[user_category], key=lambda x: x['rank'])[:5]
+           
+           # 기간 정보 추출
+           period = f"{category_data[0]['start_date']} ~ {category_data[0]['end_date']}"
+           
+           # 순위 정보 구성
+           for item in category_data:
+               trend_info.append(f"{item['rank']}위: {item['product_name']}")
+           
+           trend_text = "\n".join(trend_info)
+           
+           # 시스템 메시지 구성
+           system_message = f"""
+            You are an AI retail trend analyst specializing in sales improvement.
+
+            Let me show you how to analyze retail trends with multiple examples:
+
+            Example 1:
+            Input Data:
+            Category: 디지털/가전
+            Period: 2024-01-04 ~ 2024-02-04
+            Rank 1: 무선이어폰
+            Rank 2: 공기청정기
+            Rank 3: 스마트워치
+            Rank 4: 가습기
+            Rank 5: 블루투스스피커
+
+            Thought Process:
+            1. Two out of top 5 are IoT/wearable devices (earphones, smartwatch)
+            2. Winter season items (air purifier, humidifier) show seasonal demand
+            3. Audio devices (earphones, speaker) indicate strong entertainment needs 
+            4. Mix of health (air care) and lifestyle tech shows balanced consumption
+
+            Analysis Result:
+            ▶ [디지털/가전] 월간트렌드 TOP 5
+            (2024-01-04 ~ 2024-02-04)
+            1위: 무선이어폰
+            2위: 공기청정기
+            3위: 스마트워치
+            4위: 가습기
+            5위: 블루투스스피커
+
+            ▶ 트렌드 분석
+            웨어러블/IoT 기기에 대한 수요가 높게 나타났으며, 실내 공기질 관리 가전도 강세를 보이고 있습니다. 특히 무선이어폰과 스마트워치의 상위 랭크는 모바일 라이프스타일이 더욱 강화되고 있음을 시사합니다. 음향기기의 꾸준한 수요도 특징적입니다.
+
+            ▶ 다음 달 트렌드 예측
+            신학기를 앞두고 스마트기기 수요가 더욱 증가할 것으로 예상되며, 환절기 대비 공기질 관리 가전의 수요도 지속될 것으로 전망됩니다.
+
+            Example 2:
+            Input Data:
+            Category: 의류/잡화
+            Period: 2024-01-04 ~ 2024-02-04
+            Rank 1: 여성 패딩
+            Rank 2: 남성 운동화
+            Rank 3: 여성 부츠
+            Rank 4: 여성 운동화
+            Rank 5: 여성 크로스백
+
+            Thought Process:
+            1. Winter apparel dominates with padding and boots
+            2. Athletic shoes popular across genders suggests active lifestyle trend
+            3. Women's fashion items show stronger presence in rankings
+            4. Mix of practical (shoes) and fashion (crossbag) items indicates balanced consumer needs
+
+            Analysis Result:
+            ▶ [의류/잡화] 월간트렌드 TOP 5
+            (2024-01-04 ~ 2024-02-04)
+            1위: 여성 패딩
+            2위: 남성 운동화
+            3위: 여성 부츠
+            4위: 여성 운동화
+            5위: 여성 크로스백
+
+            ▶ 트렌드 분석
+            동절기 필수 아이템인 패딩과 부츠가 강세를 보이고 있으며, 특히 여성 의류/잡화의 수요가 두드러집니다. 운동화는 남녀 모두에게 인기가 높아 캐주얼/스포티한 스타일이 트렌드임을 알 수 있습니다.
+
+            ▶ 다음 달 트렌드 예측
+            환절기로 접어들며 가벼운 아우터와 운동화 수요가 지속될 것으로 예상되며, 봄 시즌 새로운 스타일의 잡화 수요가 증가할 것으로 전망됩니다.
+
+            Now, please analyze the following data using the same thought process:
+            Category: {category}
+            Period: {period}
+            {trend_text}
+
+            Remember to:
+            1. First analyze the patterns in the ranking data
+            2. Consider seasonal and market factors
+            3. Think about consumer behavior and preferences
+            4. Make logical predictions based on these factors
+            5. Present your analysis in Korean using the same format as the examples
+            """
+
+           # Solar ChatAPI 응답 생성
+           response = client.chat.completions.create(
+               model="solar-pro",
+               messages=[
+                   {"role": "system", "content": system_message},
+                   {"role": "user", "content": f"Please analyze the trends for {category} category and provide the response in Korean."}
+               ],
+               temperature=0.3, 
+               stream=False,
+               response_format={"type": "text/html"}
+           )
+
+           if hasattr(response, 'error'):
+               return {
+                   "response": f"API 오류: {response.error}",
+                   "status": "error",
+                   "error": str(response.error)
+               }
+
+           return {
+               "response": response.choices[0].message.content,
+               "status": "success"
+           }
+       else:
+           # 카테고리가 없는 경우 사용 가능한 카테고리 목록 반환
+           available_categories = list(categorized_trends.keys())
+           return {
+               "response": f"죄송합니다. '{user_category}' 카테고리는 현재 트렌드 정보에 없습니다.\n\n조회 가능한 카테고리: {', '.join(available_categories)}",
+               "status": "success"
+           }
+
+   except Exception as e:
+       print(f"Error in trend-chat: {str(e)}")
+       return {
+           "status": "error",
+           "error": f"서버 오류가 발생했습니다: {str(e)}"
+       }
 
 
 @app.get("/api/inventory")
@@ -1011,7 +1145,6 @@ def compute_fixed_reorder_points():
 
 # ✅ 서버 실행 시 최초 계산하여 저장
 FIXED_REORDER_POINTS = compute_fixed_reorder_points()
-
 
 @app.get("/api/reorder_points")
 def get_reorder_points(start: str, end: str):

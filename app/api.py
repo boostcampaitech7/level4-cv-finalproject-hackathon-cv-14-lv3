@@ -153,7 +153,7 @@ def main():
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             return s.connect_ex(("0.0.0.0", port)) == 0  # S104
 
-    port = 8000
+    port = 8888
     while is_port_in_use(port) and port < 8020:
         port += 1
 
@@ -162,4 +162,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main() 

@@ -83,7 +83,7 @@ const ChatPage = () => {
       setIsLoading(false);
       setMessage(''); // 입력 창 초기화
     }
-  };
+};
 
   const renderMessage = (chat, index) => (
     <>

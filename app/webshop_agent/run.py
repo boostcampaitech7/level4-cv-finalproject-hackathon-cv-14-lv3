@@ -1,9 +1,10 @@
 import os
+import json
 import argparse
+import os
+from typing import Any
 
 from webshop_trial import run_trial
-
-from typing import Any, List, Dict
 
 
 def get_args():
@@ -11,6 +12,7 @@ def get_args():
     parser.add_argument("--num_trials", type=int, help="The number of trials to run")
     parser.add_argument("--num_envs", type=int, help="The number of environments per trial")
     parser.add_argument("--run_name", type=str, help="The name of the run")
+    parser.add_argument("--use_memory", action='store_true', help="Allow the Agent to use memory")
     parser.add_argument("--is_resume", action='store_true', help="To resume run")
     parser.add_argument("--resume_dir", type=str, help="If resume, the logging directory", default="")
     parser.add_argument("--start_trial_num", type=int, help="If resume, the start trial num", default=0)
@@ -30,6 +32,13 @@ def main(args) -> None:
             raise ValueError(f"Resume directory `{args.resume_dir}` does not exist")
         logging_dir = args.resume_dir
 
+        # load environment configs
+        env_config_path: str = os.path.join(args.resume_dir, f'env_results_trial_{args.start_trial_num - 1}.json')
+        if not os.path.exists(env_config_path):
+            raise ValueError(f"Environment config file `{env_config_path}` does not exist")
+        with open(env_config_path, 'r') as rf:
+            env_configs: List[Dict[str, Any]] = json.load(rf)
+
     else:
         # Create the run directory
         if not os.path.exists(args.run_name):
@@ -43,14 +52,13 @@ def main(args) -> None:
             num_envs = args.num_envs
 
         # initialize environment configs
-        env_configs: List[Dict[str, Any]] = []
+        env_configs: list[dict[str, Any]] = []
         for i in range(num_envs):
             env_configs += [{
                 'name': f'env_{i}',
                 'memory': [],
                 'is_success': False
             }]
-    
     world_log_path: str = os.path.join(logging_dir, 'world.log')
 
     # print start status to user
@@ -75,11 +83,22 @@ def main(args) -> None:
 
         # set paths to log files
         trial_log_path: str = os.path.join(args.run_name, f'trial_{trial_idx}.log')
+        trial_env_configs_log_path: str = os.path.join(args.run_name, f'env_results_trial_{trial_idx}.json')
         if os.path.exists(trial_log_path):
             open(trial_log_path, 'w').close()
+        if os.path.exists(trial_env_configs_log_path):
+            open(trial_env_configs_log_path, 'w').close()
 
         # run trial
-        run_trial(trial_log_path, world_log_path, trial_idx, env_configs, args.run_http, args.item_list)
+        run_trial(trial_log_path, world_log_path, trial_idx, env_configs, args.use_memory, args.run_http, args.item_list)
+
+        # update memory if needed
+        if args.use_memory:
+            env_configs: List[Dict[str, Any]] = update_memory(trial_log_path, env_configs)
+
+        # log env configs for trial
+        with open(trial_env_configs_log_path, 'w') as wf:
+            json.dump(env_configs, wf, indent=4)
 
         # log world for trial
         with open(world_log_path, 'a') as wf:

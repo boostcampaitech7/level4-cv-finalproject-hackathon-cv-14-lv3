@@ -30,16 +30,16 @@ class EnvironmentHistory:
         s: str = self._cur_query + '\n'
         for i, item in enumerate(self._history):
             if item['label'] == 'action':
-                s += f'> {item["value"]}'
+                s += f"{item['value']}\n"
             elif item['label'] == 'observation':
-                s += item['value']
+                s += f"Observation: {item['value']}\n\nAction: "
             elif item['label'] == 'human_edit':
                 s += f'[human edit]: {item["value"]}'
-            if i != len(self._history) - 1:
-                s += '\n'
+            # if i != len(self._history) - 1:
+            #     s += '\nend.'
         return s
 
-def _get_base_query(base_query: str, start_info: str, memory: List[str]) -> str:
+def _get_base_query(base_query: str, start_info: str, memory: list[str]) -> str:
     query = base_query
 
     # add memory if it exists
