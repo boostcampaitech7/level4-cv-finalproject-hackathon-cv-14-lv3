@@ -466,7 +466,36 @@ const handleResetSort = async () => {
     }
   };
 
+  // filteredInventory가 업데이트될 때마다 재고 부족 상품 자동 등록
+  useEffect(() => {
+    const updateOrderProducts = async () => {
+        try {
+            // 재고 부족 상품 필터링
+            const lowStockItems = filteredInventory
+                .filter(item => item.isLowStock)
+                .map(item => ({
+                    id: item.id,
+                    quantity: item.reorder_point * 2 - item.value  // 주문할 수량 계산
+                }));
 
+            if (lowStockItems.length > 0) {
+                await fetch('http://127.0.0.1:8000/api/update-order-products', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(lowStockItems)
+                });
+            }
+        } catch (error) {
+            console.error("❌ 주문 목록 업데이트 중 오류:", error);
+        }
+    };
+
+    if (filteredInventory.length > 0) {
+        updateOrderProducts();
+    }
+  }, [filteredInventory]);  // filteredInventory가 변경될 때마다 실행
 
   return (
     <div className="inventory-container">

@@ -8,7 +8,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Body
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 from pydantic import BaseModel
@@ -1256,6 +1256,50 @@ async def get_trend_products():
     except Exception as e:
         print(f"Error in get_trend_products: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/update-order-products")
+async def update_order_products(low_stock_items: list = Body(...)):
+    try:
+        # 현재 order_product 테이블의 상품 ID 목록 가져오기
+        existing_orders = supabase.table('order_product').select('id').execute()
+        existing_ids = set(item['id'] for item in existing_orders.data)
+        
+        # 제품 정보 가져오기 (카테고리 정보용)
+        product_info_response = supabase.from_('product_info').select("*").execute()
+        product_info_df = pd.DataFrame(product_info_response.data)
+        
+        # 주문 상품 데이터 준비 (이미 등록된 상품 제외)
+        order_items = []
+        for item in low_stock_items:
+            if str(item['id']) not in existing_ids:  # 이미 등록된 상품이 아닌 경우만 추가
+                try:
+                    product_info = product_info_df[product_info_df['id'] == int(item['id'])].iloc[0]
+                    
+                    order_items.append({
+                        'id': str(item['id']),
+                        'main': product_info['main'],
+                        'sub1': product_info['sub1'],
+                        'sub2': product_info['sub2'],
+                        'sub3': product_info['sub3'],
+                        'quantity': item['quantity']
+                    })
+                except Exception as e:
+                    print(f"상품 ID {item['id']}의 정보 처리 중 오류 발생: {str(e)}")
+                    continue
+        
+        if order_items:
+            # 새로운 주문 데이터만 삽입
+            result = supabase.table('order_product').insert(order_items).execute()
+            return {"status": "success", "message": f"{len(order_items)}개 상품이 주문 목록에 추가되었습니다."}
+        
+        return {"status": "success", "message": "추가할 새로운 상품이 없습니다."}
+
+    except Exception as e:
+        # 중복 키 에러는 무시하고 성공으로 처리
+        if 'duplicate key value' in str(e):
+            return {"status": "success", "message": "이미 등록된 상품입니다."}
+        print(f"❌ 주문 상품 업데이트 오류: {str(e)}")
+        return {"status": "error", "message": str(e)}
 
 # main
 if __name__ == "__main__":
