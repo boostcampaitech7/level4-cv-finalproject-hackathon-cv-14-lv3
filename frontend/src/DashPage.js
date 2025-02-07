@@ -882,8 +882,8 @@ function DashPage() {
         {[
           { title: "연간 매출", value: kpis.annual_sales, diff: 0 },
           { title: "일간 매출", value: dailyVals.current, diff: dailyDiffPct },
-          { title: "주간 매출", value: monthlyVals.current, diff: monthlyDiffPct },
-          { title: "월간 매출", value: weeklyVals.current, diff: weeklyDiffPct }
+          { title: "주간 매출", value: weeklyVals.current, diff: weeklyDiffPct },
+          { title: "월간 매출", value: monthlyVals.current, diff: monthlyDiffPct }
         ].map(({ title, value, diff }, idx) => (
           <div key={idx} style={{
             backgroundColor: "#f8f9fa",
