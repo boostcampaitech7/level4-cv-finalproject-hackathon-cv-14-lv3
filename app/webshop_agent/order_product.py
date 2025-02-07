@@ -79,7 +79,7 @@ print(low_stock_df[["id", "value", "reorder_point"]])
 
 # 재고 부족한 제품 ID 목록
 low_stock_ids = low_stock_df["id"].tolist()
-low_stock_df.rename(columns={'reorder_point': 'quantity'}, inplace=True)
+low_stock_df.rename(columns={'value': 'quantity'}, inplace=True) # 시연영상을 위한 코드
 low_stock_df['quantity'] = (low_stock_df['quantity'] // 1).astype(int)
 
 reorder_item_df = load_product_info(low_stock_ids)
@@ -120,12 +120,3 @@ if len(data_to_insert) != 0:
         print("데이터 업로드 성공!")
     else:
         print("업로드 실패:", response)
-
-# 특정 id 값의 value 업데이트
-# id_to_update = 21033  # 업데이트할 id
-# new_value = 15  # 변경할 value 값
-
-# response = supabase.table("product_inventory").update({"value": new_value}).eq("id", id_to_update).execute()
-
-# # 결과 확인
-# print(f"결과: {response}")

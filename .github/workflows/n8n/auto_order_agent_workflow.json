@@ -1,5 +1,5 @@
 {
-  "name": "auto_order_agent_workflow",
+  "name": "My workflow",
   "nodes": [
     {
       "parameters": {
@@ -9,10 +9,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1140,
-        80
+        620,
+        120
       ],
-      "id": "4df8505d-498e-4b5f-83c3-aed768828cf9",
+      "id": "c844e64c-e52c-4800-9882-2a1938282ed6",
       "name": "Code"
     },
     {
@@ -28,10 +28,10 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        -120,
-        20
+        -640,
+        60
       ],
-      "id": "ef020819-60a5-4771-9bdd-45f0cec9f41e",
+      "id": "3b0f0d84-cc39-4372-b6b0-d343e49c8ba5",
       "name": "Schedule Trigger"
     },
     {
@@ -43,16 +43,16 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
       "position": [
-        940,
-        80
+        420,
+        120
       ],
-      "id": "5ebbc29b-cff9-4939-b972-ddb70b0190e7",
+      "id": "bda77a13-0108-44f9-9b84-c10d9942c591",
       "name": "Merge"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "http://host.docker.internal:8000/purchase",
+        "url": "http://host.docker.internal:8888/purchase",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -67,10 +67,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        720,
-        -40
+        200,
+        0
       ],
-      "id": "c680ba01-519a-4129-9b5d-1c37da3a604d",
+      "id": "b747dfd5-e667-4f38-ad37-b108541eef76",
       "name": "Auto-Order-Agent"
     },
     {
@@ -96,21 +96,21 @@
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 1.8,
       "position": [
-        1360,
-        -20
+        840,
+        20
       ],
-      "id": "aa0336aa-69fd-46a7-86af-bc2d4c9aa6d0",
+      "id": "08dffe31-9649-4ddb-95e4-3f014b564b5d",
       "name": "OpenAI",
       "credentials": {
         "openAiApi": {
-          "id": "fJonTdRHICWpXJAh",
+          "id": "zZBQ8zL5qIAwKIVy",
           "name": "OpenAi account"
         }
       }
     },
     {
       "parameters": {
-        "sendTo": "taehan5479@gmail.com",
+        "sendTo": "jangjang0022@gmail.com",
         "subject": "주간 물품 구매 결과 보고서",
         "emailType": "text",
         "message": "={{ $json.message.content }}",
@@ -121,15 +121,15 @@
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
       "position": [
-        1560,
-        -20
+        1040,
+        20
       ],
-      "id": "6f000a1f-119b-4280-985f-cb921d3e46a5",
+      "id": "917d903d-d9b7-4bcc-bf11-823f08669e22",
       "name": "Gmail",
       "webhookId": "7de19796-0312-439b-8b6f-2c5bb2c385ee",
       "credentials": {
         "gmailOAuth2": {
-          "id": "ged36ZWz56iSUfsj",
+          "id": "VQpeCvDhHsEsftS5",
           "name": "Gmail account"
         }
       }
@@ -163,10 +163,10 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        280,
-        100
+        -240,
+        140
       ],
-      "id": "a73aef36-962d-4e36-bc90-14f415130d3c",
+      "id": "7f941315-985a-4d63-b23a-ed28f86b965a",
       "name": "order_list"
     },
     {
@@ -178,14 +178,14 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        80,
-        20
+        -440,
+        60
       ],
-      "id": "b6562481-1c21-4974-9388-f5eedce1da01",
+      "id": "a23b1922-a4c1-4cc1-abff-c9ed0bd8f5b5",
       "name": "Supabase1",
       "credentials": {
         "supabaseApi": {
-          "id": "Pt6nV2B9ZR7Nq7KD",
+          "id": "gl4REHd2T6kxumS7",
           "name": "Supabase account"
         }
       }
@@ -198,10 +198,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        520,
-        -40
+        0,
+        0
       ],
-      "id": "c103ae6a-c6b5-4938-b2fe-47f974a3e935",
+      "id": "af294f3a-8556-4715-b5c7-c13413fbda28",
       "name": "Code2"
     },
     {
@@ -222,14 +222,14 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        120,
-        420
+        -400,
+        460
       ],
-      "id": "210542fe-5cb7-4664-8b95-5881ed0cb35c",
+      "id": "c785d90f-530f-4f18-98d5-adcf997ffaf2",
       "name": "Supabase",
       "credentials": {
         "supabaseApi": {
-          "id": "Pt6nV2B9ZR7Nq7KD",
+          "id": "gl4REHd2T6kxumS7",
           "name": "Supabase account"
         }
       }
@@ -262,10 +262,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1560,
-        180
+        1040,
+        220
       ],
-      "id": "34e22479-c896-4c96-b57c-4a456c868fc7",
+      "id": "ed41ebf0-3fad-4320-9288-3f39caa1e544",
       "name": "If"
     },
     {
@@ -281,26 +281,19 @@
             }
           ]
         },
-        "fieldsUi": {
-          "fieldValues": [
-            {
-              "fieldId": "value",
-              "fieldValue": "={{ $json.value }}"
-            }
-          ]
-        }
+        "dataToSend": "autoMapInputData"
       },
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        920,
-        420
+        400,
+        460
       ],
-      "id": "e1757fa7-b948-4f19-aeb1-5f89ab8c8952",
+      "id": "25a1d46a-da9f-414f-8c38-3f0f569ae5b2",
       "name": "Supabase2",
       "credentials": {
         "supabaseApi": {
-          "id": "Pt6nV2B9ZR7Nq7KD",
+          "id": "gl4REHd2T6kxumS7",
           "name": "Supabase account"
         }
       }
@@ -313,10 +306,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1360,
-        160
+        840,
+        200
       ],
-      "id": "29ed3d82-57d4-4413-934c-3bab4dbca7d5",
+      "id": "9f7abe02-0fea-4b02-b305-74fe92f1a809",
       "name": "Code1"
     },
     {
@@ -337,14 +330,14 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        320,
-        540
+        -200,
+        580
       ],
-      "id": "9d72f63f-c299-4f26-bab7-139ce45e98e0",
+      "id": "9d3a83fb-7855-46c1-aded-beeadeb51ef8",
       "name": "Supabase3",
       "credentials": {
         "supabaseApi": {
-          "id": "Pt6nV2B9ZR7Nq7KD",
+          "id": "gl4REHd2T6kxumS7",
           "name": "Supabase account"
         }
       }
@@ -352,15 +345,15 @@
     {
       "parameters": {
         "language": "python",
-        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  item.json.value = item.json.value+item.json.quantity\n  del item.json.main\n  del item.json.sub1\n  del item.json.sub2\n  del item.json.sub3\n  del item.json.quantity\nreturn _input.all()"
+        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  item.json.value = item.json.quantity\n  del item.json.main\n  del item.json.sub1\n  del item.json.sub2\n  del item.json.sub3\n  del item.json.quantity\nreturn _input.all()"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        700,
-        420
+        180,
+        460
       ],
-      "id": "d9b5a3ca-78da-46c0-a444-b10838d1e1f7",
+      "id": "0a06f03a-8619-4af7-b9f9-4bc48480ef2f",
       "name": "Code3"
     },
     {
@@ -372,11 +365,29 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
       "position": [
-        480,
-        400
+        -40,
+        440
       ],
-      "id": "00e4f3a2-b2f4-48c0-9a55-7813b2417be7",
+      "id": "12249c9c-264c-4375-98c4-f033b188a3d0",
       "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/api/auto_orders",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"items\": [\n    {\n      \"id\": {{ $json.id }},\n      \"value\": {{ $json.value }},\n      \"is_orderable\": {{ $json.is_orderable }}\n    }\n  ]\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        620,
+        460
+      ],
+      "id": "9fc1be20-1e2c-410e-b3d1-f0d69383096d",
+      "name": "HTTP Request"
     }
   ],
   "pinData": {},
@@ -517,11 +528,6 @@
         ]
       ]
     },
-    "Supabase2": {
-      "main": [
-        []
-      ]
-    },
     "Supabase3": {
       "main": [
         [
@@ -554,17 +560,28 @@
           }
         ]
       ]
+    },
+    "Supabase2": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "f040599d-9d69-41f4-849c-cf4fa7074a4a",
+  "versionId": "7c23d2e0-e9f4-4dc8-aa03-6aa864bf5414",
   "meta": {
     "templateCredsSetupCompleted": true,
-    "instanceId": "89ddddfba8d870bb904e2070b342d6e3bd595dc49e89131cde59469edd32e972"
+    "instanceId": "ffc0dae1a216a08b6c96e063cc922b10ce0f1571a3cf1ec1540f1d8196c89e73"
   },
-  "id": "7Y7obULgnNIz0oRP",
+  "id": "6DJ8Y6XDGn3wifyB",
   "tags": []
 }
