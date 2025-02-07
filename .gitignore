@@ -22,3 +22,6 @@ __pycache__/
 *.csv
 node_modules/
 credentials.json
+
+#webshop
+app/webshop_agent/**/*.json
