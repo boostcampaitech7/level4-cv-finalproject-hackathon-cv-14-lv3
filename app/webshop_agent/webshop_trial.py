@@ -47,7 +47,7 @@ def llm(prompt, stop=["\n"]):
             cur_try += 1
         return ""
 
-    except Exception as e:
+    except Exception:
         # print(f"Buy 0 Fail: {e}")
         # import sys
         # sys.exit(1)
@@ -147,7 +147,6 @@ def webshop_text(session, page_type, query_string='', page_num=1, asin='', optio
 class webshopEnv:
     def __init__(self):
         self.sessions = {}
-
     def step(self, session, action):
         done = False
         observation_ = None

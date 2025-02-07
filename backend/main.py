@@ -1,21 +1,234 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect,HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-import httpx
-from datetime import datetime
-import pandas as pd
-import sqlalchemy
-import re
-from dotenv import load_dotenv
 import os
-import requests
-import json
+import random
+import re
+import sqlite3
+
+import numpy as np
+import pandas as pd
+import torch
+import torch.nn as nn
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
+from pydantic import BaseModel
+from sklearn.preprocessing import LabelEncoder
 from supabase import create_client
 from supabase.lib.client_options import ClientOptions
-import time
-import sqlite3
-from pydantic import BaseModel
-from typing import List
+from torch.utils.data import DataLoader, Dataset
+from tqdm.auto import tqdm
+
+device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+print(device)
+
+CFG = {
+    'TRAIN_WINDOW_SIZE':60,
+    'PREDICT_SIZE':1,
+    'EPOCHS':50,
+    'LEARNING_RATE':1e-4,
+    'BATCH_SIZE':1024,
+    'SEED': 42
+}
+
+def seed_everything(seed):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
+
+seed_everything(CFG['SEED'])
+
+train_cat = pd.read_csv('data/train.csv').drop(columns=['ID'])
+train_num = pd.read_csv('data/train.csv').drop(columns=['ID'])
+
+train_cat = train_cat.iloc[:,:4]
+train_num = train_num.iloc[:, 4:-41]
+
+train_data = pd.concat([train_cat, train_num], axis=1)
+
+out_train = pd.read_csv('data/train.csv')
+out_train = out_train.iloc[:, -7:]
+
+train_data = pd.concat([train_data, out_train], axis=1)
+
+# 숫자형 변수들의 min-max scaling을 수행하는 코드입니다. real_train
+numeric_cols = train_data.columns[4:]
+
+# 각 column의 min 및 max 계산
+min_values = train_data[numeric_cols].min(axis = 1)
+max_values = train_data[numeric_cols].max(axis = 1)
+
+# 각 행의 범위(max-min)를 계산하고, 범위가 0인 경우 1로 대체
+ranges = max_values - min_values
+ranges[ranges == 0] = 1
+
+# min-max scaling 수행
+train_data[numeric_cols] = (train_data[numeric_cols].subtract(min_values, axis = 0)).div(ranges, axis = 0)
+
+# max와 min 값을 dictionary 형태로 저장
+scale_min_dict = min_values.to_dict()
+scale_max_dict = max_values.to_dict()
+
+# 1. 범주형 변수 레이블 인코딩
+label_encoders = {}  # 각 컬럼별로 LabelEncoder를 저장
+categorical_columns = ['Main', 'Sub1', 'Sub2', 'Sub3']
+
+for col in categorical_columns:
+    le = LabelEncoder()
+    train_data[col] = le.fit_transform(train_data[col]).astype(int)
+    label_encoders[col] = le
+
+# 2. 임베딩 레이어 생성
+class CategoricalEmbedding(nn.Module):
+    def __init__(self, input_sizes, embedding_dims):
+        super(CategoricalEmbedding, self).__init__()
+
+        # 각 범주형 변수에 대한 임베딩 레이어를 생성
+        self.embeddings = nn.ModuleList([
+            nn.Embedding(input_size, dim) for input_size, dim in zip(input_sizes, embedding_dims, strict=False)
+        ])
+
+    def forward(self, x):
+        # x: [batch_size, num_categorical_features]
+        embedded = [embedding(x[:, i]) for i, embedding in enumerate(self.embeddings)]
+        return torch.cat(embedded, dim=1)  # 연결된 임베딩 벡터 반환
+
+# 각 범주형 변수의 최대값 (레이블 인코딩된 값) + 1을 구함
+input_sizes = [train_data[col].max() + 1 for col in categorical_columns]
+
+# 임베딩 차원 설정
+embedding_dims = [int(np.sqrt(size) // 2) for size in input_sizes]
+
+model = CategoricalEmbedding(input_sizes, embedding_dims)
+
+# 모든 행에 대한 범주형 데이터를 PyTorch 텐서로 변환
+all_data_tensor = torch.tensor(train_data[categorical_columns].values, dtype = torch.long)
+
+# 임베딩 모델에 텐서를 입력하여 임베딩된 값을 얻음
+with torch.no_grad():
+    all_embedded_values = model(all_data_tensor)
+
+# 임베딩된 텐서를 numpy 배열로 변환
+all_embedded_np = all_embedded_values.numpy()
+
+# 임베딩된 값을 저장할 임시 데이터프레임 생성
+embedded_df = pd.DataFrame()
+
+start_idx = 0
+# 각 범주형 변수에 대한 임베딩된 값을 새로운 컬럼으로 추가
+for i, col in enumerate(categorical_columns):
+    col_names = [f"{col}_{j}" for j in range(embedding_dims[i])]
+    for idx, name in enumerate(col_names):
+        embedded_df[name] = all_embedded_np[:, start_idx + idx]
+    start_idx += embedding_dims[i]
+
+# 레이블 인코딩된 컬럼 제거
+train_data.drop(columns=categorical_columns, inplace = True)
+
+# 임베딩된 데이터를 원본 데이터프레임의 앞 부분에 추가
+train_data = pd.concat([embedded_df, train_data], axis = 1)
+
+# 결과 확인
+train_data.head()
+
+def make_predict_data(data, train_size = CFG['TRAIN_WINDOW_SIZE']):
+    num_rows = len(data)
+
+    input_data = np.empty((num_rows, train_size, len(data.iloc[0, :33]) + 1))
+
+    for i in tqdm(range(num_rows)):
+        encode_info = np.array(data.iloc[i, :33])
+        sales_data = np.array(data.iloc[i, -train_size:])
+
+        window = sales_data[-train_size : ]
+        temp_data = np.column_stack((np.tile(encode_info, (train_size, 1)), window[:train_size]))
+        input_data[i] = temp_data
+
+    return input_data
+
+test_input = make_predict_data(train_data)
+
+# Custom Dataset
+class CustomDataset(Dataset):
+    def __init__(self, X, Y):
+        self.X = X
+        self.Y = Y
+
+    def __getitem__(self, index):
+        if self.Y is not None:
+            return torch.Tensor(self.X[index]), torch.Tensor(self.Y[index])
+        return torch.Tensor(self.X[index])
+
+    def __len__(self):
+        return len(self.X)
+
+test_dataset = CustomDataset(test_input, None)
+test_loader = DataLoader(test_dataset, batch_size = CFG['BATCH_SIZE'], shuffle = False, num_workers = 0)
+
+def inference(model, test_loader, device):
+    predictions = []
+
+    with torch.no_grad():
+        for X in tqdm(iter(test_loader)):
+            X = X.to(device)
+
+            output = model(X)
+
+            # 모델 출력인 output을 CPU로 이동하고 numpy 배열로 변환
+            output = output.cpu().numpy()
+
+            predictions.extend(output)
+
+    return np.array(predictions)
+
+class Mish(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return x * torch.tanh(nn.functional.softplus(x))
+
+class StackedLSTMModel(nn.Module):
+    def __init__(self, input_size = 34, hidden_size = 1024, output_size = CFG['PREDICT_SIZE'], num_layers = 3, dropout = 0.5):
+        super(StackedLSTMModel, self).__init__()
+
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+
+        # LSTM 레이어 내부에 dropout 적용
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers=num_layers, dropout = (0 if num_layers == 1 else dropout), batch_first = True)
+
+        self.fc = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size//2),
+            Mish(),
+            nn.Linear(hidden_size//2, output_size)
+        )
+
+        self.actv = Mish()
+
+    def forward(self, x):
+        # x shape: (B, TRAIN_WINDOW_SIZE, 5)
+        batch_size = x.size(0)
+        hidden = self.init_hidden(batch_size, x.device)
+
+        # LSTM layers
+        x, hidden = self.lstm(x, hidden)
+
+        # Only use the last output sequence
+        last_output = x[:, -1, :]
+
+        # Fully connected layer
+        output = self.actv(self.fc(last_output))
+
+        return output.squeeze(1)
+
+    def init_hidden(self, batch_size, device):
+        # Initialize hidden state and cell state
+        return (torch.zeros(self.num_layers, batch_size, self.hidden_size, device = device),
+                torch.zeros(self.num_layers, batch_size, self.hidden_size, device = device))
 
 # 1) FastAPI 앱 생성
 app = FastAPI()
@@ -35,7 +248,6 @@ app.add_middleware(
 # 환경 변수 로드
 load_dotenv()
 UPSTAGE_API_KEY = os.getenv('UPSTAGE_API_KEY')
-UPSTAGE_API_BASE_URL = os.getenv('UPSTAGE_API_BASE_URL')
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 
@@ -86,22 +298,51 @@ def load_all_data(table_name):
 
 # daily_sales_data 테이블의 모든 데이터를 읽어와 DataFrame으로 변환
 def load_sales_data():
-    all_data = load_all_data("daily_sales_data")
-    df = pd.DataFrame(all_data)
+    try:
+        # 절대 경로 사용
+        db_path = os.path.join(os.path.dirname(__file__), "../database/database.db")
+        conn = sqlite3.connect(db_path)
 
-    # date 컬럼이 존재하면 datetime으로 변환
-    if "date" in df.columns:
-        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        # id를 정수로 가져오도록 쿼리 수정
+        df = pd.read_sql_query("SELECT CAST(id AS INTEGER) as id, date, value FROM daily_sales_data", conn)
+        conn.close()
 
-    return df
+        # 열 이름을 소문자로 변환
+        df.columns = df.columns.str.lower()
+
+        # date 컬럼이 존재하면 datetime으로 변환
+        if "date" in df.columns:
+            df["date"] = pd.to_datetime(df["date"], errors="coerce")
+
+        return df
+    except Exception as e:
+        print(f"Error loading sales data: {e!s}")
+        print(f"Current working directory: {os.getcwd()}")
+        print(f"Database path: {db_path}")
+        raise
 
 # daily_data 테이블의 모든 데이터를 읽어와 DataFrame으로 변환
 def load_quantity_data():
-    all_data = load_all_data("daily_data")
-    df = pd.DataFrame(all_data)
-    if "date" in df.columns:
-        df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    return df
+    try:
+        # 절대 경로 사용
+        db_path = os.path.join(os.path.dirname(__file__), "../database/database.db")
+        conn = sqlite3.connect(db_path)
+
+        # id를 정수로 가져오도록 쿼리 수정
+        df = pd.read_sql_query("SELECT CAST(id AS INTEGER) as id, date, value FROM daily_data", conn)
+        conn.close()
+
+        # 열 이름을 소문자로 변환
+        df.columns = df.columns.str.lower()
+
+        if "date" in df.columns:
+            df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        return df
+    except Exception as e:
+        print(f"Error loading quantity data: {e!s}")
+        print(f"Current working directory: {os.getcwd()}")
+        print(f"Database path: {db_path}")
+        raise
 
 # product_inventory 테이블의 모든 데이터를 읽어와 DataFrame으로 변환
 def load_inventory_data():
@@ -109,6 +350,19 @@ def load_inventory_data():
     df = pd.DataFrame(all_data)
     return df
 
+# trend_product 테이블의 데이터를 읽어오는 함수
+def load_trend_data():
+    try:
+        response = supabase.table('trend_product') \
+            .select('product_name, rank, category, id') \
+            .eq('rank', 1) \
+            .execute()
+
+        df = pd.DataFrame(response.data)
+        return df
+    except Exception as e:
+        print(f"Error loading trend data: {e!s}")
+        raise
 
 # 데이터 로드
 df_sales = load_sales_data()
@@ -116,7 +370,8 @@ reconnect_supabase()
 inventory_df = load_inventory_data()
 reconnect_supabase()
 df_quantity = load_quantity_data()
-
+reconnect_supabase()
+trend_df = load_trend_data()  # 트렌드 데이터 로드 추가
 
 # ===== 컬럼명 변경 =====
 df_sales = df_sales.rename(columns={'value': '매출액'})
@@ -134,6 +389,11 @@ if '소분류' not in df_sales.columns or '대분류' not in df_sales.columns:
     df_product_info = pd.DataFrame(product_info_response.data)
     # 필요한 컬럼명을 변경합니다.
     df_product_info = df_product_info.rename(columns={"sub1": "대분류", "sub3": "소분류"})
+
+    # id 컬럼을 문자열로 변환
+    df_sales['id'] = df_sales['id'].astype(str)
+    df_product_info['id'] = df_product_info['id'].astype(str)
+
     # df_sales에 product_info를 id를 기준으로 병합 (left join)
     df_sales = df_sales.merge(df_product_info[["id", "대분류", "소분류"]], on="id", how="left")
 
@@ -296,40 +556,106 @@ def get_rising_subcategories():
         "subcat_list": list(subcat_list)  # 넘파이 Index -> list
     }
 
-# (추가) 상·하위 10개 품목
+# (수정) 판매수량 상위 10개 품목 반환 엔드포인트
 @app.get("/api/topbottom")
 def get_topbottom():
-    if last_month_col:
-        # Supabase에서 product_info 데이터 가져오기
-        response = supabase.table('product_info').select("id", "sub3").execute()
-        product_info = pd.DataFrame(response.data)
+    try:
+        # df_quantity는 이미 전역 변수로 로드되어 있음 (컬럼: id, date, 판매수량)
+        # 전체 판매수량을 제품별로 집계
+        sales_qty_total = df_quantity.groupby('id', as_index=False)['판매수량'].sum()
 
-        # ID 컬럼을 문자열로 변환
+        # 판매수량 상위 10개 품목 선택
+        top_10_df = sales_qty_total.nlargest(10, '판매수량').copy()
+        top_10_df['id'] = top_10_df['id'].astype(str)
+        top_10_df = top_10_df.rename(columns={'id': 'ID', '판매수량': '총판매수량'})
+
+        # Supabase에서 product_info 데이터 (예: 제품명 또는 sub3 정보를 가져옴)
+        response = supabase.table('product_info').select("id, sub3").execute()
+        product_info = pd.DataFrame(response.data)
         product_info['id'] = product_info['id'].astype(str)
         product_info = product_info.rename(columns={'id': 'ID', 'sub3': 'Sub3'})
 
-        # top 10
-        top_10_df = result.nlargest(10, last_month_col, keep='all').copy()
-        top_10_df = top_10_df.rename(columns={'id': 'ID'})
-        top_10_df['ID'] = top_10_df['ID'].astype(str)
+        # 집계 데이터와 product_info를 병합 (제품명 등 추가 정보 포함)
         top_10_df = pd.merge(top_10_df, product_info, on='ID', how='left')
-        top_10_list = top_10_df.to_dict('records')  # DataFrame을 리스트로 변환
 
-        # bottom 10
-        non_zero_values = result[result[last_month_col] != 0]
-        bottom_10_df = non_zero_values.nsmallest(10, last_month_col).copy()
-        bottom_10_df = bottom_10_df.rename(columns={'id': 'ID'})
-        bottom_10_df['ID'] = bottom_10_df['ID'].astype(str)
-        bottom_10_df = pd.merge(bottom_10_df, product_info, on='ID', how='left')
-        bottom_10_list = bottom_10_df.to_dict('records')  # DataFrame을 리스트로 변환
-    else:
-        top_10_list = []
-        bottom_10_list = []
+        top_10_list = top_10_df.to_dict('records')
+        return {
+            "top_10": top_10_list
+        }
+    except Exception as e:
+        print(f"Error in get_topbottom: {e!s}")
+        return {
+            "top_10": [],
+            "error": str(e)
+        }
+
+# 챗봇용 데이터 미리 준비
+def prepare_chat_data():
+    # 월별 매출 데이터
+    monthly_sales_text = "월별 매출 데이터:\n" + "\n".join([
+        f"{row['월간'].strftime('%Y-%m')}: {row['값']:,}원"
+        for row in monthly_sum_df.to_dict('records')
+    ])
+
+    # 주간 매출 데이터
+    weekly_sales_text = "주간 매출 데이터:\n" + "\n".join([
+        f"{row['주간'].strftime('%Y-%m-%d')}: {row['값']:,}원"
+        for row in weekly_data.tail(12).to_dict('records')
+    ])
+
+    # 일별 매출 데이터
+    daily_sales_text = "최근 30일 일별 매출 데이터:\n" + "\n".join([
+        f"{row['날짜'].strftime('%Y-%m-%d')}: {row['값']:,}원"
+        for row in daily_df.tail(30).to_dict('records')
+    ])
+
+    # 카테고리별 매출 상세
+    category_details = df_sales.groupby('대분류').agg({
+        '매출액': ['sum', 'mean', 'count']
+    }).reset_index()
+    category_details.columns = ['대분류', '총매출', '평균매출', '판매건수']
+
+    category_text = "카테고리별 매출 상세:\n" + "\n".join([
+        f"{row['대분류']}: 총매출 {row['총매출']:,}원, 평균 {row['평균매출']:,.0f}원, {row['판매건수']}건"
+        for _, row in category_details.iterrows()
+    ])
+
+    # 재고 현황 상세
+    inventory_status = pd.merge(
+        inventory_df,
+        daily_sales_quantity_last,
+        on='id',
+        how='left'
+    )
+
+    # product_info 테이블에서 카테고리 정보 가져오기
+    product_info_response = supabase.from_('product_info').select("id,main,sub3").execute()
+    product_info_df = pd.DataFrame(product_info_response.data)
+
+    # 데이터 병합
+    inventory_status = pd.merge(
+        inventory_status,
+        product_info_df,
+        left_on='id',
+        right_on='id',
+        how='left'
+    )
+
+    inventory_status['일판매수량'] = inventory_status['일판매수량'].fillna(0)
+    inventory_status['남은재고'] = inventory_status['재고수량'] - inventory_status['일판매수량']
+
+    inventory_text = "카테고리별 재고 현황:\n" + "\n".join([
+        f"{row['main'] if pd.notna(row['main']) else '미분류'}({row['sub3'] if pd.notna(row['sub3']) else '미분류'}): "
+        f"총재고 {row['재고수량']}개, 일판매량 {row['일판매수량']}개, 남은재고 {row['남은재고']}개"
+        for _, row in inventory_status.iterrows()
+    ])
 
     return {
-        "top_10": top_10_list,
-        "bottom_10": bottom_10_list,
-        "last_month_col": last_month_col
+        "monthly_sales": monthly_sales_text,
+        "weekly_sales": weekly_sales_text,
+        "daily_sales": daily_sales_text,
+        "category_details": category_text,
+        "inventory_status": inventory_text
     }
 
 # 챗봇용 데이터 미리 준비
@@ -672,15 +998,15 @@ async def chat_with_trend(message: dict):
            }
 
    except Exception as e:
-       print(f"Error in trend-chat: {str(e)}")
+       print(f"Error in trend-chat: {e!s}")
        return {
            "status": "error",
-           "error": f"서버 오류가 발생했습니다: {str(e)}"
+           "error": f"서버 오류가 발생했습니다: {e!s}"
        }
 
 
 @app.get("/api/inventory")
-def get_inventory(sort: str = "asc", main: str = None, sub1: str = None, sub2: str = None):
+def get_inventory(sort: str = None, main: str = None, sub1: str = None, sub2: str = None):
     try:
         response = supabase.from_('product_inventory').select("""
             id, value,
@@ -711,10 +1037,12 @@ def get_inventory(sort: str = "asc", main: str = None, sub1: str = None, sub2: s
         if sub2:
             df_inventory = df_inventory[df_inventory["sub2"] == sub2]
 
-        # ✅ 재고 수량(value) 기준 정렬
-        df_inventory = df_inventory.sort_values(by=["value"], ascending=(sort == "asc"))
+        # ✅ 정렬을 프론트엔드에서만 담당 (백엔드는 정렬 X)
+        if sort:
+            df_inventory = df_inventory.sort_values(by=["value"], ascending=(sort == "asc"))
 
         return df_inventory.to_dict(orient="records")
+    
     
     except Exception as e:
         print(f"❌ Error fetching inventory: {e!s}")
@@ -747,12 +1075,38 @@ def get_category_filters(main: str = None, sub1: str = None, sub2: str = None):
         return {"error": str(e)}
 
 
-
 # ✅ 최소 재고 기준(ROP) 계산 (서버 실행 시 한 번만 수행)
 def compute_fixed_reorder_points():
     try:
         response = supabase.from_('monthly_sales').select("*").execute()
         df_sales = pd.DataFrame(response.data)
+
+        # 모델 인스턴스 생성
+        infer_model = StackedLSTMModel().to(device)
+
+        # 저장된 가중치 로드
+        infer_model.load_state_dict(torch.load("weight/best_model.pth", map_location=device))
+        pred = inference(infer_model, test_loader, device)
+        # 1️⃣ 🔹 Inverse Scaling 적용
+        for idx in range(len(pred)):
+            if isinstance(scale_min_dict, dict):  # ✅ 딕셔너리일 경우
+                min_val = scale_min_dict.get(idx, 0)  # 기본값 0
+                max_val = scale_max_dict.get(idx, 1)  # 기본값 1
+            else:  # 리스트나 넘파이 배열일 경우
+                min_val = scale_min_dict[idx]
+                max_val = scale_max_dict[idx]
+
+            pred[idx] = pred[idx] * (max_val - min_val) + min_val
+
+        # 2️⃣ 🔹 예측 데이터 후처리 (반올림 및 정수 변환)
+        pred = np.round(pred, 0).astype(int)
+
+        # 3️⃣ 🔹 음수값을 0으로 변경
+        pred[pred < 0] = 0
+
+        # 4️⃣ 🔹 1차원 배열이면 (N, 1)로 변환
+        if pred.ndim == 1:
+            pred = pred.reshape(-1, 1)
 
         if df_sales.empty:
             return {}
@@ -761,11 +1115,11 @@ def compute_fixed_reorder_points():
         valid_dates = [col for col in df_sales.columns if re.match(r"\d{2}_m\d{2}", col)]
         df_sales["monthly_avg_sales"] = df_sales[valid_dates].mean(axis=1).fillna(0)
 
-        # ✅ 전체 데이터 기준으로 일 평균 판매량 계산
-        df_sales["daily_avg_sales"] = df_sales["monthly_avg_sales"] / 30
+        # ✅ 전체 데이터 기준으로 일 평균 판매량 계산 -> 여기를 모델 inference 결과
+        df_sales["daily_avg_sales"] = pred
 
         # ✅ 최소 재고 기준(ROP) 계산: 일 평균 판매량의 2배 + 10
-        df_sales["reorder_point"] = (df_sales["daily_avg_sales"] * 2 + 25).fillna(25)
+        df_sales["reorder_point"] = (df_sales["daily_avg_sales"] * 2 + 10).fillna(10)
 
         # ✅ `id`를 문자열로 변환하여 JSON 직렬화 오류 방지
         df_sales["id"] = df_sales["id"].astype(str)
@@ -776,13 +1130,12 @@ def compute_fixed_reorder_points():
         return reorder_points
 
     except Exception as e:
-        print(f"❌ 최소 재고 기준 계산 오류: {str(e)}")
+        print(f"❌ 최소 재고 기준 계산 오류: {e!s}")
         return {}
 
 # ✅ 서버 실행 시 최초 계산하여 저장
 FIXED_REORDER_POINTS = compute_fixed_reorder_points()
 
-    
 @app.get("/api/reorder_points")
 def get_reorder_points(start: str, end: str):
     try:
@@ -815,9 +1168,8 @@ def get_reorder_points(start: str, end: str):
         return reorder_data
 
     except Exception as e:
-        print(f"❌ ROP 갱신 오류: {str(e)}")
+        print(f"❌ ROP 갱신 오류: {e!s}")
         return {"error": str(e)}
-    
 
 active_connections = []
 db_path = os.path.join(os.path.dirname(__file__), "../database/database.db")
@@ -855,7 +1207,7 @@ class OrderItem(BaseModel):
     is_orderable: bool
 
 class OrderData(BaseModel):
-    items: List[OrderItem]
+    items: list[OrderItem]
 
 # ✅ WebSocket 핸들러 (프론트엔드와 실시간 연결)
 @app.websocket("/ws/auto_orders")

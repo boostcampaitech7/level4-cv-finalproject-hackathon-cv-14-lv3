@@ -10,6 +10,7 @@ env
 *.bin
 .pytest_cache
 __pycache__/
+*.pth
 
 # Ruff
 -unsafe-fixes
