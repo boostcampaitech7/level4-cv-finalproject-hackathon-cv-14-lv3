@@ -1,6 +1,4 @@
-import asyncio
 import os
-import subprocess
 import sys
 from pathlib import Path
 
@@ -8,6 +6,10 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+
+import subprocess
+from typing import List
+import asyncio
 
 # Configure imports and environment
 EMBEDDINGS_DIR = Path(__file__).parent.parent / "database"
@@ -100,7 +102,7 @@ async def process_batch(batch: BatchProductInput):
     except Exception as err:
         raise HTTPException(status_code=500, detail=str(err)) from err
 
-async def run_process(command: list[str]):
+async def run_process(command: List[str]):
     """webshop agent 프로세스 실행"""
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
@@ -139,7 +141,7 @@ async def purchase_item(params: ItemListInput):
         result = await run_process(command)
         return result
     except Exception as e:
-        print(f"Error: {e!s}")
+        print(f"Error: {str(e)}")
         return {"status": "error", "message": str(e)}
 
 def main():
@@ -151,7 +153,7 @@ def main():
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             return s.connect_ex(("0.0.0.0", port)) == 0  # S104
 
-    port = 8000
+    port = 8888
     while is_port_in_use(port) and port < 8020:
         port += 1
 
@@ -160,4 +162,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main() 
