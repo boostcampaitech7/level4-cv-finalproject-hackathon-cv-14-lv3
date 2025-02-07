@@ -6,8 +6,6 @@ from typing import Any
 
 from webshop_trial import run_trial
 
-from typing import Any, List, Dict
-
 
 def get_args():
     parser = argparse.ArgumentParser()
