@@ -15,6 +15,232 @@ from supabase.lib.client_options import ClientOptions
 import time
 import sqlite3
 
+import random
+import os
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from tqdm.auto import tqdm
+from sklearn.preprocessing import LabelEncoder
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+from torch.utils.data import Dataset, DataLoader
+
+device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+print(device)
+
+CFG = {
+    'TRAIN_WINDOW_SIZE':60,
+    'PREDICT_SIZE':1,
+    'EPOCHS':50,
+    'LEARNING_RATE':1e-4,
+    'BATCH_SIZE':1024,
+    'SEED': 42
+}
+
+def seed_everything(seed):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
+
+seed_everything(CFG['SEED'])
+
+train_cat = pd.read_csv('/data/train.csv').drop(columns=['ID'])
+train_num = pd.read_csv('/data/train.csv').drop(columns=['ID'])
+
+train_cat = train_cat.iloc[:,:4]
+train_num = train_num.iloc[:, 4:-41]
+
+train_data = pd.concat([train_cat, train_num], axis=1)
+
+out_train = pd.read_csv('/data/train.csv')
+out_train = out_train.iloc[:, -7:]
+
+train_data = pd.concat([train_data, out_train], axis=1)
+
+# 숫자형 변수들의 min-max scaling을 수행하는 코드입니다. real_train
+numeric_cols = train_data.columns[4:]
+
+# 각 column의 min 및 max 계산
+min_values = train_data[numeric_cols].min(axis = 1)
+max_values = train_data[numeric_cols].max(axis = 1)
+
+# 각 행의 범위(max-min)를 계산하고, 범위가 0인 경우 1로 대체
+ranges = max_values - min_values
+ranges[ranges == 0] = 1
+
+# min-max scaling 수행
+train_data[numeric_cols] = (train_data[numeric_cols].subtract(min_values, axis = 0)).div(ranges, axis = 0)
+
+# max와 min 값을 dictionary 형태로 저장
+scale_min_dict = min_values.to_dict()
+scale_max_dict = max_values.to_dict()
+
+# 1. 범주형 변수 레이블 인코딩
+label_encoders = {}  # 각 컬럼별로 LabelEncoder를 저장
+categorical_columns = ['Main', 'Sub1', 'Sub2', 'Sub3']
+
+for col in categorical_columns:
+    le = LabelEncoder()
+    train_data[col] = le.fit_transform(train_data[col]).astype(int)
+    label_encoders[col] = le
+
+# 2. 임베딩 레이어 생성
+class CategoricalEmbedding(nn.Module):
+    def __init__(self, input_sizes, embedding_dims):
+        super(CategoricalEmbedding, self).__init__()
+
+        # 각 범주형 변수에 대한 임베딩 레이어를 생성
+        self.embeddings = nn.ModuleList([
+            nn.Embedding(input_size, dim) for input_size, dim in zip(input_sizes, embedding_dims)
+        ])
+
+    def forward(self, x):
+        # x: [batch_size, num_categorical_features]
+        embedded = [embedding(x[:, i]) for i, embedding in enumerate(self.embeddings)]
+        return torch.cat(embedded, dim=1)  # 연결된 임베딩 벡터 반환
+
+# 각 범주형 변수의 최대값 (레이블 인코딩된 값) + 1을 구함
+input_sizes = [train_data[col].max() + 1 for col in categorical_columns]
+
+# 임베딩 차원 설정
+embedding_dims = [int(np.sqrt(size) // 2) for size in input_sizes]
+
+model = CategoricalEmbedding(input_sizes, embedding_dims)
+
+# 모든 행에 대한 범주형 데이터를 PyTorch 텐서로 변환
+all_data_tensor = torch.tensor(train_data[categorical_columns].values, dtype = torch.long)
+
+# 임베딩 모델에 텐서를 입력하여 임베딩된 값을 얻음
+with torch.no_grad():
+    all_embedded_values = model(all_data_tensor)
+
+# 임베딩된 텐서를 numpy 배열로 변환
+all_embedded_np = all_embedded_values.numpy()
+
+# 임베딩된 값을 저장할 임시 데이터프레임 생성
+embedded_df = pd.DataFrame()
+
+start_idx = 0
+# 각 범주형 변수에 대한 임베딩된 값을 새로운 컬럼으로 추가
+for i, col in enumerate(categorical_columns):
+    col_names = [f"{col}_{j}" for j in range(embedding_dims[i])]
+    for idx, name in enumerate(col_names):
+        embedded_df[name] = all_embedded_np[:, start_idx + idx]
+    start_idx += embedding_dims[i]
+
+# 레이블 인코딩된 컬럼 제거
+train_data.drop(columns=categorical_columns, inplace = True)
+
+# 임베딩된 데이터를 원본 데이터프레임의 앞 부분에 추가
+train_data = pd.concat([embedded_df, train_data], axis = 1)
+
+# 결과 확인
+train_data.head()
+
+def make_predict_data(data, train_size = CFG['TRAIN_WINDOW_SIZE']):
+    num_rows = len(data)
+
+    input_data = np.empty((num_rows, train_size, len(data.iloc[0, :33]) + 1))
+
+    for i in tqdm(range(num_rows)):
+        encode_info = np.array(data.iloc[i, :33])
+        sales_data = np.array(data.iloc[i, -train_size:])
+
+        window = sales_data[-train_size : ]
+        temp_data = np.column_stack((np.tile(encode_info, (train_size, 1)), window[:train_size]))
+        input_data[i] = temp_data
+
+    return input_data
+
+test_input = make_predict_data(train_data)
+
+# Custom Dataset
+class CustomDataset(Dataset):
+    def __init__(self, X, Y):
+        self.X = X
+        self.Y = Y
+
+    def __getitem__(self, index):
+        if self.Y is not None:
+            return torch.Tensor(self.X[index]), torch.Tensor(self.Y[index])
+        return torch.Tensor(self.X[index])
+
+    def __len__(self):
+        return len(self.X)
+
+test_dataset = CustomDataset(test_input, None)
+test_loader = DataLoader(test_dataset, batch_size = CFG['BATCH_SIZE'], shuffle = False, num_workers = 0)
+
+def inference(model, test_loader, device):
+    predictions = []
+
+    with torch.no_grad():
+        for X in tqdm(iter(test_loader)):
+            X = X.to(device)
+
+            output = model(X)
+
+            # 모델 출력인 output을 CPU로 이동하고 numpy 배열로 변환
+            output = output.cpu().numpy()
+
+            predictions.extend(output)
+
+    return np.array(predictions)
+
+class Mish(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return x * torch.tanh(nn.functional.softplus(x))
+
+class StackedLSTMModel(nn.Module):
+    def __init__(self, input_size = 34, hidden_size = 1024, output_size = CFG['PREDICT_SIZE'], num_layers = 3, dropout = 0.5):
+        super(StackedLSTMModel, self).__init__()
+
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+
+        # LSTM 레이어 내부에 dropout 적용
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers=num_layers, dropout = (0 if num_layers == 1 else dropout), batch_first = True)
+
+        self.fc = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size//2),
+            Mish(),
+            nn.Linear(hidden_size//2, output_size)
+        )
+
+        self.actv = Mish()
+
+    def forward(self, x):
+        # x shape: (B, TRAIN_WINDOW_SIZE, 5)
+        batch_size = x.size(0)
+        hidden = self.init_hidden(batch_size, x.device)
+
+        # LSTM layers
+        x, hidden = self.lstm(x, hidden)
+
+        # Only use the last output sequence
+        last_output = x[:, -1, :]
+
+        # Fully connected layer
+        output = self.actv(self.fc(last_output))
+
+        return output.squeeze(1)
+
+    def init_hidden(self, batch_size, device):
+        # Initialize hidden state and cell state
+        return (torch.zeros(self.num_layers, batch_size, self.hidden_size, device = device),
+                torch.zeros(self.num_layers, batch_size, self.hidden_size, device = device))
+
 # 1) FastAPI 앱 생성
 app = FastAPI()
 
@@ -139,7 +365,7 @@ def load_trend_data():
             .select('product_name, rank, category, id') \
             .eq('rank', 1) \
             .execute()
-        
+
         df = pd.DataFrame(response.data)
         return df
     except Exception as e:
@@ -629,11 +855,11 @@ def get_daily_top_sales():
         # 이미 병합된 df_sales 사용 (대분류, 소분류 정보 포함)
         latest_date = df_sales['date'].max()
         latest_sales = df_sales[df_sales['date'] == latest_date].copy()
-        
+
         # 제품별 매출액 합계 계산 및 상위 7개 선택
         daily_top_7 = latest_sales.groupby(['id', '대분류', '소분류'], as_index=False)['매출액'].sum()
         daily_top_7 = daily_top_7.nlargest(7, '매출액')
-        
+
         # 결과 포맷팅
         result = [{
             'id': str(row['id']),
@@ -642,12 +868,12 @@ def get_daily_top_sales():
             'sales': float(row['매출액']),
             'date': latest_date
         } for _, row in daily_top_7.iterrows()]
-        
+
         return result
     except Exception as e:
         print(f"Error in get_daily_top_sales: {str(e)}")
         return []
-        
+
 
 @app.get("/api/inventory")
 def get_inventory(sort: str = "asc", main: str = None, sub1: str = None, sub2: str = None):
@@ -672,7 +898,7 @@ def get_inventory(sort: str = "asc", main: str = None, sub1: str = None, sub2: s
 
         # ✅ 불필요한 컬럼 제거 (`product_info`는 원본 JSON이므로 삭제)
         df_inventory = df_inventory.drop(columns=["product_info"])
-        
+
         # ✅ 필터링 적용
         if main:
             df_inventory = df_inventory[df_inventory["main"] == main]
@@ -685,7 +911,7 @@ def get_inventory(sort: str = "asc", main: str = None, sub1: str = None, sub2: s
         df_inventory = df_inventory.sort_values(by=["value"], ascending=(sort == "asc"))
 
         return df_inventory.to_dict(orient="records")
-    
+
     except Exception as e:
         print(f"❌ Error fetching inventory: {e!s}")
         return {"error": str(e)}
@@ -724,6 +950,33 @@ def compute_fixed_reorder_points():
         response = supabase.from_('monthly_sales').select("*").execute()
         df_sales = pd.DataFrame(response.data)
 
+        # 모델 인스턴스 생성
+        infer_model = StackedLSTMModel().to(device)
+
+        # 저장된 가중치 로드
+        infer_model.load_state_dict(torch.load("./weight/best_model.pth", map_location=device))
+        pred = inference(infer_model, test_loader, device)
+        # 1️⃣ 🔹 Inverse Scaling 적용
+        for idx in range(len(pred)):
+            if isinstance(scale_min_dict, dict):  # ✅ 딕셔너리일 경우
+                min_val = scale_min_dict.get(idx, 0)  # 기본값 0
+                max_val = scale_max_dict.get(idx, 1)  # 기본값 1
+            else:  # 리스트나 넘파이 배열일 경우
+                min_val = scale_min_dict[idx]
+                max_val = scale_max_dict[idx]
+
+            pred[idx] = pred[idx] * (max_val - min_val) + min_val
+
+        # 2️⃣ 🔹 예측 데이터 후처리 (반올림 및 정수 변환)
+        pred = np.round(pred, 0).astype(int)
+
+        # 3️⃣ 🔹 음수값을 0으로 변경
+        pred[pred < 0] = 0
+
+        # 4️⃣ 🔹 1차원 배열이면 (N, 1)로 변환
+        if pred.ndim == 1:
+            pred = pred.reshape(-1, 1)
+
         if df_sales.empty:
             return {}
 
@@ -731,8 +984,8 @@ def compute_fixed_reorder_points():
         valid_dates = [col for col in df_sales.columns if re.match(r"\d{2}_m\d{2}", col)]
         df_sales["monthly_avg_sales"] = df_sales[valid_dates].mean(axis=1).fillna(0)
 
-        # ✅ 전체 데이터 기준으로 일 평균 판매량 계산
-        df_sales["daily_avg_sales"] = df_sales["monthly_avg_sales"] / 30
+        # ✅ 전체 데이터 기준으로 일 평균 판매량 계산 -> 여기를 모델 inference 결과
+        df_sales["daily_avg_sales"] = pred
 
         # ✅ 최소 재고 기준(ROP) 계산: 일 평균 판매량의 2배 + 10
         df_sales["reorder_point"] = (df_sales["daily_avg_sales"] * 2 + 10).fillna(10)
@@ -752,7 +1005,7 @@ def compute_fixed_reorder_points():
 # ✅ 서버 실행 시 최초 계산하여 저장
 FIXED_REORDER_POINTS = compute_fixed_reorder_points()
 
-    
+
 @app.get("/api/reorder_points")
 def get_reorder_points(start: str, end: str):
     try:
@@ -787,7 +1040,7 @@ def get_reorder_points(start: str, end: str):
     except Exception as e:
         print(f"❌ ROP 갱신 오류: {str(e)}")
         return {"error": str(e)}
-    
+
 # ✅ 자동 주문 완료 리스트 저장
 auto_orders = {}
 
