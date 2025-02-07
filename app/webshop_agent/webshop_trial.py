@@ -212,9 +212,10 @@ class webshopEnv:
         reward = info.get('reward', 0.0)
         return observation, reward, done
 
-def webshop_run(idx, env, base_prompt, to_print=True, run_http=False, item = "") -> Tuple[EnvironmentHistory, bool]: # memory: List[str],
+def webshop_run(idx, env, base_prompt, memory: List[str], to_print=True, run_http=False, item = "") -> Tuple[EnvironmentHistory, bool]:
     action = 'reset'
-    init_prompt = "You run in a loop of Action, Observation..\n **IMPORTANT**: 1. Never include Observation in your answer! 2. Complete the action answer one by one \n" + base_prompt
+    system_prompt = "You run in a loop of Action, Observation..\n **IMPORTANT**: 1. Never include Observation in your answer! 2. Complete the action answer one by one! \n"
+    init_prompt = system_prompt + base_prompt
     prompt = ''
 
     res = env.step(idx, action)
@@ -226,13 +227,20 @@ Instruction:
 i am looking for {item}.
 [Search]
 """
-    env_history = EnvironmentHistory(base_prompt, observation, [], [])
+    if len(memory) > 3:
+        env_history = EnvironmentHistory(base_prompt, observation, memory[-3:], [])
+    else:
+        env_history = EnvironmentHistory(base_prompt, observation, memory, [])
     env_history.reset()
     for i in range(15):
-        env_history.add("action", action)
         try:
-            res = env.step(idx, action)
-            observation = res[0]
+            if i:
+                if i == 1:
+                    env_history.add("action", f"\nAction: {action}")
+                else:
+                    env_history.add("action", action)
+                res = env.step(idx, action)
+                observation = res[0]
             if action == 'reset' and run_http==True:
                 observation = f"""
 WebShop
@@ -251,14 +259,14 @@ i am looking for {item}.
         else:
             prompt += f'{observation}\n\nAction:'
 
-        env_history.add("observation", observation)
+        if i:
+            env_history.add("observation", observation)
 
         # if done, check if reward is complete value
         if res[2]:
             return env_history, res[1] == 1.0, res[1]
 
-        action = llm(init_prompt + prompt[-(6400-len(init_prompt)):], stop=['\n']).lstrip(' ')
-        # print("-------------------------------------------------------------------------")
+        action = llm(f"{system_prompt}{env_history}", stop=['\n']).lstrip(' ')
         if i == 14 and res[2] == False:
             print(f"Buy {idx} Fail: Attempt count exceeded")
 
@@ -269,6 +277,7 @@ def run_trial(
         world_log_path: str,
         trial_idx: int,
         env_configs: List[Dict[str, Any]],
+        use_memory: bool,
         run_http : bool = False,
         item_string : str = "",
     ) -> List[Dict[str, Any]]:
@@ -284,6 +293,7 @@ def run_trial(
     for z, env_config in enumerate(env_configs):
         if env_config["is_success"]:
             num_successes += 1
+            sum_reward += 1.0
             # log to world log
             with open(world_log_path, 'a') as wf:
                 wf.write(f'Environment #{z} Trial #{trial_idx}: SUCCESS\n')
@@ -293,9 +303,9 @@ def run_trial(
 
         try:
             if run_http:
-                final_env_history, is_success, reward = webshop_run(f'{z}', env, BASE_PROMPT, to_print=False, run_http=run_http, item = item_list[z]) #  env_config["memory"] if use_memory else [],
+                final_env_history, is_success, reward = webshop_run(f'{z}', env, BASE_PROMPT, env_config["memory"] if use_memory else [], to_print=False, run_http=run_http, item = item_list[z])
             else:
-                final_env_history, is_success, reward = webshop_run(f'{z}', env, BASE_PROMPT, to_print=False) #  env_config["memory"] if use_memory else [],
+                final_env_history, is_success, reward = webshop_run(f'{z}', env, BASE_PROMPT, env_config["memory"] if use_memory else [], to_print=False)
             sum_reward += reward
             if is_success:
                 status_str: str = f'Environment #{z} Trial #{trial_idx}: SUCCESS'
