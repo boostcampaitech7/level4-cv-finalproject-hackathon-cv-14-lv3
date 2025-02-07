@@ -1,11 +1,11 @@
 import os
 import sys
 from pathlib import Path
-import pandas as pd
-from supabase import Client, create_client
-from supabase.lib.client_options import ClientOptions
 
+import pandas as pd
 from dotenv import load_dotenv
+from supabase import create_client
+from supabase.lib.client_options import ClientOptions
 
 # Configure imports and environment
 EMBEDDINGS_DIR = Path(__file__).parent.parent.parent / "database"

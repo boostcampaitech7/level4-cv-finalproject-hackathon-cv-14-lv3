@@ -47,7 +47,7 @@ def llm(prompt, stop=["\n"]):
             cur_try += 1
         return ""
 
-    except Exception as e:
+    except Exception:
         # print(f"Buy 0 Fail: {e}")
         # import sys
         # sys.exit(1)

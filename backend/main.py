@@ -1,32 +1,22 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect,HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-import httpx
-from datetime import datetime
-import pandas as pd
-import sqlalchemy
-import re
-from dotenv import load_dotenv
 import os
-import requests
-import json
-from openai import OpenAI
-from supabase import create_client
-from supabase.lib.client_options import ClientOptions
-import time
-import sqlite3
-from pydantic import BaseModel
-from typing import List
 import random
-import numpy as np
-import matplotlib.pyplot as plt
-from tqdm.auto import tqdm
-from sklearn.preprocessing import LabelEncoder
+import re
+import sqlite3
 
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from openai import OpenAI
+from pydantic import BaseModel
+from sklearn.preprocessing import LabelEncoder
+from supabase import create_client
+from supabase.lib.client_options import ClientOptions
+from torch.utils.data import DataLoader, Dataset
+from tqdm.auto import tqdm
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 print(device)
@@ -98,7 +88,7 @@ class CategoricalEmbedding(nn.Module):
 
         # 각 범주형 변수에 대한 임베딩 레이어를 생성
         self.embeddings = nn.ModuleList([
-            nn.Embedding(input_size, dim) for input_size, dim in zip(input_sizes, embedding_dims)
+            nn.Embedding(input_size, dim) for input_size, dim in zip(input_sizes, embedding_dims, strict=False)
         ])
 
     def forward(self, x):
@@ -326,7 +316,7 @@ def load_sales_data():
 
         return df
     except Exception as e:
-        print(f"Error loading sales data: {str(e)}")
+        print(f"Error loading sales data: {e!s}")
         print(f"Current working directory: {os.getcwd()}")
         print(f"Database path: {db_path}")
         raise
@@ -349,7 +339,7 @@ def load_quantity_data():
             df["date"] = pd.to_datetime(df["date"], errors="coerce")
         return df
     except Exception as e:
-        print(f"Error loading quantity data: {str(e)}")
+        print(f"Error loading quantity data: {e!s}")
         print(f"Current working directory: {os.getcwd()}")
         print(f"Database path: {db_path}")
         raise
@@ -371,7 +361,7 @@ def load_trend_data():
         df = pd.DataFrame(response.data)
         return df
     except Exception as e:
-        print(f"Error loading trend data: {str(e)}")
+        print(f"Error loading trend data: {e!s}")
         raise
 
 # 데이터 로드
@@ -556,7 +546,7 @@ def get_low_stock():
 
         return merged_low_stock.to_dict(orient="records")
     except Exception as e:
-        print(f"Error in get_low_stock: {str(e)}")
+        print(f"Error in get_low_stock: {e!s}")
         return {"error": str(e)}
 
 @app.get("/api/rising-subcategories")
@@ -593,7 +583,7 @@ def get_topbottom():
             "top_10": top_10_list
         }
     except Exception as e:
-        print(f"Error in get_topbottom: {str(e)}")
+        print(f"Error in get_topbottom: {e!s}")
         return {
             "top_10": [],
             "error": str(e)
@@ -1008,10 +998,10 @@ async def chat_with_trend(message: dict):
            }
 
    except Exception as e:
-       print(f"Error in trend-chat: {str(e)}")
+       print(f"Error in trend-chat: {e!s}")
        return {
            "status": "error",
-           "error": f"서버 오류가 발생했습니다: {str(e)}"
+           "error": f"서버 오류가 발생했습니다: {e!s}"
        }
 
 
@@ -1140,7 +1130,7 @@ def compute_fixed_reorder_points():
         return reorder_points
 
     except Exception as e:
-        print(f"❌ 최소 재고 기준 계산 오류: {str(e)}")
+        print(f"❌ 최소 재고 기준 계산 오류: {e!s}")
         return {}
 
 # ✅ 서버 실행 시 최초 계산하여 저장
@@ -1178,7 +1168,7 @@ def get_reorder_points(start: str, end: str):
         return reorder_data
 
     except Exception as e:
-        print(f"❌ ROP 갱신 오류: {str(e)}")
+        print(f"❌ ROP 갱신 오류: {e!s}")
         return {"error": str(e)}
 
 active_connections = []
@@ -1217,7 +1207,7 @@ class OrderItem(BaseModel):
     is_orderable: bool
 
 class OrderData(BaseModel):
-    items: List[OrderItem]
+    items: list[OrderItem]
 
 # ✅ WebSocket 핸들러 (프론트엔드와 실시간 연결)
 @app.websocket("/ws/auto_orders")

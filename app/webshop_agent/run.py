@@ -1,6 +1,5 @@
-import os
-import json
 import argparse
+import json
 import os
 from typing import Any
 
@@ -36,7 +35,7 @@ def main(args) -> None:
         env_config_path: str = os.path.join(args.resume_dir, f'env_results_trial_{args.start_trial_num - 1}.json')
         if not os.path.exists(env_config_path):
             raise ValueError(f"Environment config file `{env_config_path}` does not exist")
-        with open(env_config_path, 'r') as rf:
+        with open(env_config_path) as rf:
             env_configs: List[Dict[str, Any]] = json.load(rf)
 
     else:
