@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect,HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 from datetime import datetime
@@ -14,6 +14,9 @@ from supabase import create_client
 from supabase.lib.client_options import ClientOptions
 import time
 import sqlite3
+from pydantic import BaseModel
+from typing import List
+
 
 import random
 import os
@@ -52,15 +55,15 @@ def seed_everything(seed):
 
 seed_everything(CFG['SEED'])
 
-train_cat = pd.read_csv('/data/train.csv').drop(columns=['ID'])
-train_num = pd.read_csv('/data/train.csv').drop(columns=['ID'])
+train_cat = pd.read_csv('data/train.csv').drop(columns=['ID'])
+train_num = pd.read_csv('data/train.csv').drop(columns=['ID'])
 
 train_cat = train_cat.iloc[:,:4]
 train_num = train_num.iloc[:, 4:-41]
 
 train_data = pd.concat([train_cat, train_num], axis=1)
 
-out_train = pd.read_csv('/data/train.csv')
+out_train = pd.read_csv('data/train.csv')
 out_train = out_train.iloc[:, -7:]
 
 train_data = pd.concat([train_data, out_train], axis=1)
@@ -243,6 +246,9 @@ class StackedLSTMModel(nn.Module):
 
 # 1) FastAPI 앱 생성
 app = FastAPI()
+
+# WebSocket 연결 관리 
+active_connections = []
 
 # CORS 설정
 app.add_middleware(
@@ -876,7 +882,7 @@ def get_daily_top_sales():
 
 
 @app.get("/api/inventory")
-def get_inventory(sort: str = "asc", main: str = None, sub1: str = None, sub2: str = None):
+def get_inventory(sort: str = None, main: str = None, sub1: str = None, sub2: str = None):
     try:
         response = supabase.from_('product_inventory').select("""
             id, value,
@@ -898,7 +904,7 @@ def get_inventory(sort: str = "asc", main: str = None, sub1: str = None, sub2: s
 
         # ✅ 불필요한 컬럼 제거 (`product_info`는 원본 JSON이므로 삭제)
         df_inventory = df_inventory.drop(columns=["product_info"])
-
+        
         # ✅ 필터링 적용
         if main:
             df_inventory = df_inventory[df_inventory["main"] == main]
@@ -907,11 +913,13 @@ def get_inventory(sort: str = "asc", main: str = None, sub1: str = None, sub2: s
         if sub2:
             df_inventory = df_inventory[df_inventory["sub2"] == sub2]
 
-        # ✅ 재고 수량(value) 기준 정렬
-        df_inventory = df_inventory.sort_values(by=["value"], ascending=(sort == "asc"))
+        # ✅ 정렬을 프론트엔드에서만 담당 (백엔드는 정렬 X)
+        if sort:
+            df_inventory = df_inventory.sort_values(by=["value"], ascending=(sort == "asc"))
 
         return df_inventory.to_dict(orient="records")
-
+    
+    
     except Exception as e:
         print(f"❌ Error fetching inventory: {e!s}")
         return {"error": str(e)}
@@ -943,7 +951,6 @@ def get_category_filters(main: str = None, sub1: str = None, sub2: str = None):
         return {"error": str(e)}
 
 
-
 # ✅ 최소 재고 기준(ROP) 계산 (서버 실행 시 한 번만 수행)
 def compute_fixed_reorder_points():
     try:
@@ -954,7 +961,7 @@ def compute_fixed_reorder_points():
         infer_model = StackedLSTMModel().to(device)
 
         # 저장된 가중치 로드
-        infer_model.load_state_dict(torch.load("./weight/best_model.pth", map_location=device))
+        infer_model.load_state_dict(torch.load("weight/best_model.pth", map_location=device))
         pred = inference(infer_model, test_loader, device)
         # 1️⃣ 🔹 Inverse Scaling 적용
         for idx in range(len(pred)):
@@ -1041,48 +1048,83 @@ def get_reorder_points(start: str, end: str):
         print(f"❌ ROP 갱신 오류: {str(e)}")
         return {"error": str(e)}
 
-# ✅ 자동 주문 완료 리스트 저장
-auto_orders = {}
+active_connections = []
+db_path = os.path.join(os.path.dirname(__file__), "../database/database.db")
 
-# ✅ 자동 주문 완료 리스트 저장 API
-@app.post("/api/auto_orders")
-def save_auto_order(order_data: dict):
-    """
-    자동 주문 완료된 상품 목록을 저장하는 엔드포인트
-    order_data 예시:
-    {
-        "order_id": "ORD12345",
-        "items": [
-            {"sub3": "상품A"},
-            {"sub3": "상품B"}
-        ],
-        "order_date": "2024-02-06T12:34:56"
-    }
-    """
-    if not order_data or "items" not in order_data or not order_data["items"]:
-        raise HTTPException(status_code=400, detail="잘못된 데이터 형식입니다.")
+def order_db():
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
 
-    for item in order_data["items"]:
-        sub3 = item["sub3"]
-        auto_orders[sub3] = {"status": "success", "order_date": order_data["order_date"]}
+    # 테이블 존재 여부 확인
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='auto_orders';"
+    )
+    table_exists = cursor.fetchone()
 
-    return {"status": "success", "message": "자동 주문 완료 리스트 저장됨", "order_id": order_data["order_id"]}
+    # 테이블이 없으면 생성
+    if not table_exists:
+        cursor.execute(
+            """CREATE TABLE auto_orders (
+                id INTEGER PRIMARY KEY,
+                value INTEGER,
+                is_orderable BOOLEAN
+            )"""
+        )
+        conn.commit()
+        print("✅ 테이블 'auto_orders'가 생성되었습니다.")
 
-# ✅ 자동 주문 완료 리스트 조회 API
-@app.get("/api/auto_orders")
-def get_auto_orders():
-    """저장된 자동 주문 완료 리스트를 반환하는 엔드포인트"""
-    return {"status": "success", "orders": auto_orders}
+    conn.close()
 
-@app.get("/api/trend-products")
-async def get_trend_products():
+order_db()
+
+# ✅ 주문 데이터 모델
+class OrderItem(BaseModel):
+    id: int
+    value: int
+    is_orderable: bool
+
+class OrderData(BaseModel):
+    items: List[OrderItem]
+
+# ✅ WebSocket 핸들러 (프론트엔드와 실시간 연결)
+@app.websocket("/ws/auto_orders")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    active_connections.append(websocket)
     try:
-        return trend_df.to_dict(orient='records')
-    except Exception as e:
-        print(f"Error in get_trend_products: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        while True:
+            await websocket.receive_text()  # 클라이언트 메시지 수신 (필요 없으면 제거 가능)
+    except WebSocketDisconnect:
+        active_connections.remove(websocket)
+
+# ✅ 주문 데이터 저장 + WebSocket으로 프론트에 전송
+@app.post("/api/auto_orders")
+async def save_auto_order(order_data: OrderData):
+    if not order_data.items:
+        raise HTTPException(status_code=400, detail="잘못된 데이터 형식입니다.")
+    db_path = os.path.join(os.path.dirname(__file__), "../database/database.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    for item in order_data.items:
+        cursor.execute(
+            """INSERT INTO auto_orders (id, value, is_orderable)
+               VALUES (?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET value = ?, is_orderable = ?""",
+            (item.id, item.value, item.is_orderable, item.value, item.is_orderable),
+        )
+
+    conn.commit()
+    conn.close()
+
+    # ✅ 주문 완료 이벤트를 WebSocket을 통해 프론트에 전송
+    order_info = {"id": item.id, "value": item.value, "status": "✅ 주문 완료"}
+    for connection in active_connections:
+        await connection.send_json(order_info)  # 프론트엔드에 JSON 데이터 전송
+
+    return {"status": "success", "message": "자동 주문 완료 리스트 저장됨"}
 
 # main
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False) 

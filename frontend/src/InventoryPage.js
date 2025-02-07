@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect,useCallback } from "react";
 import { saveAs } from "file-saver";
 import Papa from "papaparse";
 
 const InventoryPage = () => {
   const [inventory, setInventory] = useState([]);
   const [filteredInventory, setFilteredInventory] = useState([]);
-  const [sortField, setSortField] = useState(null);
-  const [sortOrder, setSortOrder] = useState("asc");
+  const [sortField, setSortField] = useState("value");  // ✅ 기본 정렬 필드: 재고량
+  const [sortOrder, setSortOrder] = useState("asc");    // ✅ 기본 정렬 방식: 오름차순
+  const [sortConfig, setSortConfig] = useState({ field: "value", order: "asc" });  // ✅ 정렬 기본값
   const [searchQuery, setSearchQuery] = useState("");
   const [keepLowStockTop, setKeepLowStockTop] = useState(true);
+
 
   // ✅ 카테고리 상태
   const [mainCategories, setMainCategories] = useState(["전체 대분류"]);
@@ -17,6 +19,7 @@ const InventoryPage = () => {
   const [selectedMain, setSelectedMain] = useState("전체 대분류");
   const [selectedSub1, setSelectedSub1] = useState("전체 중분류");
   const [selectedSub2, setSelectedSub2] = useState("전체 소분류");
+  const [selectedCategory, setSelectedCategory] = useState("All");  // (이전 오류 해결)
 
   // 날짜 선택을 위한 (월 선택하게끔)
   const [startMonth, setStartMonth] = useState("2022-01");
@@ -26,22 +29,42 @@ const InventoryPage = () => {
 
   //자동 주문
   const [autoOrders, setAutoOrders] = useState({});
-  const [selectedCategory, setSelectedCategory] = useState("All");  // (이전 오류 해결)
 
 
-  // ✅ 자동 주문된 리스트 가져오기
-  const fetchAutoOrders = async () => {
-    try {
-      const response = await fetch(`http://127.0.0.1:8000/api/auto_orders`);
-      const data = await response.json();
+  // ✅ WebSocket 연결
+  useEffect(() => { 
+    const ws = new WebSocket("ws://127.0.0.1:8000/ws/auto_orders");
 
-      if (data.status === "success") {
-        setAutoOrders(data.orders);
-      }
-    } catch (error) {
-      console.error("❌ Error fetching auto orders:", error);
+    ws.onmessage = (event) => {
+      const orderData = JSON.parse(event.data);
+      console.log("🛒 주문 완료 수신:", orderData);
+
+      // ✅ WebSocket을 통해 받은 주문 정보를 autoOrders에 반영
+      setAutoOrders((prev) => ({
+        ...prev,
+        [orderData.id]: { status: "✅ 주문 완료", value: orderData.value },
+      }));
+    };
+
+    ws.onclose = () => console.log("❌ WebSocket 연결 종료");
+
+    return () => {
+      ws.close();
+    };
+  }, []);
+
+  // ✅ 주문 완료 상태가 바뀌면 filteredInventory 업데이트
+  useEffect(() => {
+    if (Object.keys(autoOrders).length > 0) {
+      setFilteredInventory((prev) =>
+        prev.map((item) => ({
+          ...item,
+          orderStatus: autoOrders[item.id] ? "✅ 주문 완료" : item.isLowStock ? "❌ 미주문" : "-",
+          value: autoOrders[item.id]?.value ?? item.value, // ✅ 주문 완료 시 value 업데이트
+        }))
+      );
     }
-  };
+  }, [autoOrders]);
 
   const fetchCategoryFilters = async (main = "All", sub1 = "All", sub2 = "All") => {
     try {
@@ -105,6 +128,7 @@ const InventoryPage = () => {
     setSelectedSub2(value);
     applyFilters(inventory, searchQuery, selectedMain, selectedSub1, value);
   };
+
   useEffect(() => {
     const initializeData = async () => {
       const categoryData = await fetchCategoryFilters("All", "All", "All");
@@ -119,6 +143,21 @@ const InventoryPage = () => {
     };
     initializeData();
   }, []);
+  
+  useEffect(() => {
+    // ✅ `sortConfig`에 맞춰 데이터 정렬
+    if (sortConfig.field) {
+      setFilteredInventory((prevInventory) => {
+        return [...prevInventory].sort((a, b) => {
+          const aValue = parseFloat(a[sortConfig.field]) || 0;
+          const bValue = parseFloat(b[sortConfig.field]) || 0;
+  
+          return sortConfig.order === "asc" ? aValue - bValue : bValue - aValue;
+        });
+      });
+    }
+  }, [sortConfig, inventory]);  // ✅ inventory가 바뀌면 정렬 다시 적용
+  
   
 
 
@@ -177,78 +216,59 @@ useEffect(() => {
   updateReorderData();
 }, [startMonth, endMonth]);
 
-const handleSort = (field) => {
-  setKeepLowStockTop(false); // ✅ 정렬 시 상단 고정 해제
 
-  // ✅ 새로운 정렬 방향을 미리 결정
-  let newSortOrder = "asc";
-  if (sortField === field && sortOrder === "asc") {
-    newSortOrder = "desc";
-  }
+const handleSort = useCallback((field) => {
+  setKeepLowStockTop(false);
 
-  // ✅ 상태 업데이트 (비동기적 문제 해결)
-  setSortField(field);
-  setSortOrder(newSortOrder);
+  setSortConfig((prevConfig) => {
+    const isSameField = prevConfig.field === field;
+    const newOrder = isSameField && prevConfig.order === "asc" ? "desc" : "asc";
 
-  // ✅ 정렬된 데이터 즉시 적용
-  setFilteredInventory((prevInventory) => {
-    const sortedData = [...prevInventory].sort((a, b) => {
-      const aValue = field === "value" ? parseFloat(a[field]) : a[field];
-      const bValue = field === "value" ? parseFloat(b[field]) : b[field];
+    setSortField(field);
+    setSortOrder(newOrder);
 
-      return newSortOrder === "asc" ? aValue - bValue : bValue - aValue;
-    });
-
-    return sortedData;
-  });
-};
-
-// ✅ 상태 변경 시 자동 정렬 반영
-useEffect(() => {
-  if (!keepLowStockTop && sortField) {
-    setFilteredInventory((prev) => {
-      const sortedData = [...prev].sort((a, b) => {
-        const aValue = sortField === "value" ? parseFloat(a[sortField]) : a[sortField];
-        const bValue = sortField === "value" ? parseFloat(b[sortField]) : b[sortField];
-
-        return sortOrder === "asc" ? aValue - bValue : bValue - aValue;
+    setFilteredInventory((prevInventory) => {
+      return [...prevInventory].sort((a, b) => {
+        const aValue = parseFloat(a[field]) || 0;
+        const bValue = parseFloat(b[field]) || 0;
+        return newOrder === "asc" ? aValue - bValue : bValue - aValue;
       });
-      return sortedData;
     });
-  }
-}, [sortField, sortOrder, keepLowStockTop]);
+
+    return { field, order: newOrder };
+  });
+}, []);
+
+
 
 
 
 const handleResetSort = async () => {
-  // 카테고리 필터 초기화
+  setSortConfig({ field: "value", order: "asc" });
+  setSortField("value");
+  setSortOrder("asc");
+
   setSelectedMain("전체 대분류");
   setSelectedSub1("전체 중분류");
   setSelectedSub2("전체 소분류");
-  
-  // 카테고리 목록 다시 가져오기
+
   const categoryData = await fetchCategoryFilters("All", "All", "All");
   setMainCategories(["전체 대분류", ...(categoryData.main || [])]);
   setSub1Categories(["전체 중분류", ...(categoryData.sub1 || [])]);
   setSub2Categories(["전체 소분류", ...(categoryData.sub2 || [])]);
 
-  // 정렬 초기화
-  setSortField("");
-  setSortOrder("asc");
-  
-  // 검색 초기화
   setSearchQuery("");
   const searchInput = document.querySelector('.search-bar input');
   if (searchInput) {
     searchInput.value = '';
   }
 
-  // 데이터 다시 가져오기
   const reorderData = await fetchReorderPoints();
   if (Object.keys(reorderData).length > 0) {
     await fetchInventory(reorderData);
   }
 };
+
 
 
 
@@ -259,7 +279,6 @@ const handleResetSort = async () => {
       let url = `http://127.0.0.1:8000/api/inventory`;
       const params = [];
   
-      // 전체 X분류 처리
       if (main !== "All" && main !== "전체 대분류") params.push(`main=${encodeURIComponent(main)}`);
       if (sub1 !== "All" && sub1 !== "전체 중분류") params.push(`sub1=${encodeURIComponent(sub1)}`);
       if (sub2 !== "All" && sub2 !== "전체 소분류") params.push(`sub2=${encodeURIComponent(sub2)}`);
@@ -273,49 +292,35 @@ const handleResetSort = async () => {
         return;
       }
   
-      // 기존 로직 유지
       const filteredData = inventoryData.map((item) => ({
         ...item,
         sub3: item.sub3 || "제품명 없음",
       }));
-    
-      // ✅ 최소 재고 기준 데이터를 먼저 가져오기
+  
       const reorderPointsData = reorderData || reorderPoints;
       const mergedData = filteredData.map((item) => {
         const reorderInfo = reorderPointsData[item.id] || {};
-
-        // ✅ 자동 주문 완료된 상품인지 확인
-        const isOrdered = autoOrders[item.sub3]?.status === "success";
-
         return {
           ...item,
           reorder_point: reorderInfo.reorder_point ?? 10,
           daily_avg_sales: reorderInfo.daily_avg_sales ?? 0,
           monthly_avg_sales: reorderInfo.monthly_avg_sales ?? 0,
           isLowStock: item.value < (reorderInfo.reorder_point ?? 10),
-          orderStatus: isOrdered ? "✅ 주문 완료" : item.isLowStock ? "❌ 미주문" : "-",
-          value: isOrdered ? reorderInfo.reorder_point : item.value,
+          orderStatus: item.isLowStock ? "❌ 미주문" : "-",
         };
       });
-
-      
-      // ✅ `keepLowStockTop`이 `true`면 재고 부족 상품을 상단으로 정렬
-      if (keepLowStockTop) {
-        mergedData.sort((a, b) => {
-          if (a.isLowStock === b.isLowStock) return 0;
-          return a.isLowStock ? -1 : 1;
-        });
-      }
-
-      // ✅ 정렬 초기화 (기본값: 재고량 오름차순)
-      setInventory(mergedData);
-      setFilteredInventory(mergedData);
-      
+  
+      // ✅ 기본 정렬: `value` 오름차순
+      const sortedData = [...mergedData].sort((a, b) => parseFloat(a.value) - parseFloat(b.value));
+  
+      setInventory(sortedData);
+      setFilteredInventory(sortedData);
     } catch (error) {
       console.error("❌ Error fetching inventory:", error);
     }
   };
-
+  
+  
 
   const getSortedInventory = () => {
     let sortedData = [...filteredInventory];
@@ -433,7 +438,37 @@ const handleResetSort = async () => {
     const csv = Papa.unparse(csvData);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     saveAs(blob, "inventory_data.csv");
+
   };
+
+  // ✅ 자동 주문 핸들러 (주문 완료 후 UI 즉시 반영)
+  const handleAutoOrder = async (item) => {
+    try {
+      const orderData = {
+        order_date: new Date().toISOString(),
+        items: [{ id: item.id, value: item.reorder_point, is_orderable: true }],
+      };
+
+      const response = await fetch(`http://127.0.0.1:8000/api/auto_orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(orderData),
+      });
+
+      const result = await response.json();
+      if (result.status === "success") {
+        // ✅ UI 즉시 반영 (서버 응답을 기다리지 않고 화면 업데이트)
+        setAutoOrders((prev) => ({
+          ...prev,
+          [item.id]: { status: "✅ 주문 완료", value: item.reorder_point },
+        }));
+      }
+    } catch (error) {
+      console.error("❌ 주문 처리 중 오류 발생:", error);
+    }
+  };
+
+
 
   return (
     <div className="inventory-container">
@@ -520,9 +555,11 @@ const handleResetSort = async () => {
         </div>
 
         <div className="button-group">
-          <button className="sort-button" onClick={() => handleSort("value")}>
-            {sortField === "value" && sortOrder === "desc" ? "📈 재고 오름차순" : "📉 재고 내림차순"}
-          </button>
+        <button className="sort-button" onClick={() => handleSort("value")}>
+          {sortField === "value" && sortOrder === "asc" ? "📉 재고 내림차순" : "📈 재고 오름차순"}
+        </button>
+
+
           <button className="sort-button" onClick={() => handleSort("monthly_avg_sales")}>
             {sortField === "monthly_avg_sales" && sortOrder === "asc" ? "📉 월 평균 판매량 내림차순" : "📈 월 평균 판매량 오름차순"}
           </button>
@@ -567,14 +604,9 @@ const handleResetSort = async () => {
             <td className={item.isLowStock ? "low-stock-text" : ""}>
               {item.isLowStock ? "⚠️ 재고 부족" : "✅"}
             </td>
-            <td className={autoOrders[item.sub3] 
-                ? "order-success" 
-                : item.isLowStock ? "low-stock-text" : ""}
-            >
-              {autoOrders[item.sub3] 
-                ? "✅ 주문 완료" 
-                : item.isLowStock ? "❌ 미주문" : "-"}
-            </td>
+            <td className={autoOrders[item.id] ? "order-success" : item.isLowStock ? "low-stock-text" : ""}>
+                {autoOrders[item.id] ? "✅ 주문 완료" : item.isLowStock ? "❌ 미주문" : "-"}
+              </td>
           </tr>
         ))}
         </tbody>
