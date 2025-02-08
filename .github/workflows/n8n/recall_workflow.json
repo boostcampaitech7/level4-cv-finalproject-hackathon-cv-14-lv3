@@ -1,0 +1,326 @@
+{
+  "name": "recall_workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://r.jina.ai/https://www.safetykorea.kr/recall/recallBoard",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "468eb1f4-1c3d-4fa0-9f51-05f5ccd7e9a9",
+      "name": "[Jina AI] HTTP Request"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "cd25d122-4a90-4661-b407-f4f772f02137",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "def process_and_parse_recall_data(item):\n   \"\"\"리콜 데이터를 추출하고 파싱합니다.\"\"\"\n   try:\n       data = item.get(\"data\", \"\")\n       start_marker = \"번호\t사진\t제품명\t모델명\t사업자명\t리콜종류\t바코드번호\t공표일\"\n       end_marker = \"<< < 1 2 3 4 5 6 7 8 9 10 > >>\"\n       \n       start_idx = data.find(start_marker) + len(start_marker)\n       end_idx = data.find(end_marker)\n       \n       if start_idx == -1 or end_idx == -1:\n           return []\n           \n       table_data = data[start_idx:end_idx].strip()\n       result = []\n       \n       for line in table_data.split('\\n'):\n           if not line.strip():\n               continue\n               \n           fields = line.split('\\t')\n           if len(fields) < 8:\n               continue\n               \n           parsed_item = {\n               \"ID\": fields[0],\n               \"Product\": fields[2],\n               \"Model\": fields[3],\n               \"Name of company\": fields[4],\n               \"Recall type\": fields[5],\n               \"barcode\": fields[6] if fields[6] != '-' else \"\",\n               \"Announcement date\": fields[7]\n           }\n           result.append(parsed_item)\n           \n       return result\n       \n   except Exception as e:\n       return []\n\n# n8n용 메인 함수\nresult = []\nfor item in _input.all():\n   parsed_items = process_and_parse_recall_data(item.json)\n   result.extend(parsed_items)\nreturn result"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "id": "1e7bfe8f-d53f-4b19-ad7e-f3e2ba321e55",
+      "name": "Extracter & Parser"
+    },
+    {
+      "parameters": {
+        "sendTo": "taehan5479@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.body }}",
+        "options": {
+          "senderName": "GORANI"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        820,
+        0
+      ],
+      "id": "e4c5e6e8-87f0-441d-b851-fc17fdd7de3c",
+      "name": "Gmail",
+      "webhookId": "7c4f758c-d2b5-4a71-84d3-9536cd3baca5",
+      "alwaysOutputData": false,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ged36ZWz56iSUfsj",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "def combine_recalls():\n   body = \"안녕하세요,\\n\\n오늘의 리콜 정보를 알려드립니다.\\n\\n\"\n   all_recalls = []\n   latest_date = \"\"\n   \n   # 모든 입력 아이템을 처리\n   for item in _input.all():\n       if hasattr(item.json, 'keys'):  # 단일 딕셔너리인 경우\n           all_recalls.append(item.json)\n       else:  # 리스트인 경우\n           all_recalls.extend(item.json)\n\n   # 리콜 정보 결합\n   for recall in all_recalls:\n       body += f\"\"\"[리콜 제품 정보]\n- 제품명: {recall['Product']}\n- 모델명: {recall['Model']}\n- 제조/수입업체: {recall['Name of company']}\n- 리콜구분: {recall['Recall type']}\n- 공표일자: {recall['Announcement date']}\\n\\n\"\"\"\n       \n       if recall['Announcement date'] > latest_date:\n           latest_date = recall['Announcement date']\n\n   body += \"\\n자세한 내용은 제품안전정보센터(https://www.safetykorea.kr/)를 참고해 주세요.\"\n\n   return [{\n       \"subject\": f\"제품 리콜 정보 알림 ({latest_date} 기준)\",\n       \"body\": body\n   }]\n\nreturn combine_recalls()"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        0
+      ],
+      "id": "de544bd6-4b27-407e-8e7a-5706a480a936",
+      "name": "Formatter",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1e133452-b033-4565-95e1-20d558773a0e",
+              "leftValue": "={{ $json.barcode }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        620,
+        260
+      ],
+      "id": "5e56ae5e-ded1-490d-bd3b-87e05f2b4a89",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "product_info",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "barcode",
+              "condition": "eq",
+              "keyValue": "={{ $json.barcode }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        820,
+        260
+      ],
+      "id": "a94d3deb-f7a1-4173-a4a8-24f1f5843b85",
+      "name": "Supabase",
+      "credentials": {
+        "supabaseApi": {
+          "id": "Pt6nV2B9ZR7Nq7KD",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "product_inventory",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "is_orderable",
+              "fieldValue": "false"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1020,
+        260
+      ],
+      "id": "294b2af1-fb16-41a0-92f6-1ff03c7f6fea",
+      "name": "Supabase1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "Pt6nV2B9ZR7Nq7KD",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "### 리콜 상품 불러오기\n제품안전정보센터 내 공시된 리콜 상품 리스트 크롤링",
+        "height": 240,
+        "width": 420,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        160,
+        -80
+      ],
+      "typeVersion": 1,
+      "id": "158d57f1-89f5-4478-9672-68816555e05f",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "### 메일 알림 발송\n관리자 이메일로 리콜 정보 알림 발송",
+        "height": 240,
+        "width": 340
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        600,
+        -80
+      ],
+      "typeVersion": 1,
+      "id": "98b857db-3d50-45ec-ba27-9da889300dd5",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "### DB에 반영\nproduct_inventory 테이블 내 is_orderable 값 변경",
+        "height": 240,
+        "width": 540,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        600,
+        180
+      ],
+      "typeVersion": 1,
+      "id": "25d74761-8f00-4c59-8a82-0e63a8bdf89f",
+      "name": "Sticky Note2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "[Jina AI] HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Extracter & Parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "[Jina AI] HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extracter & Parser": {
+      "main": [
+        [
+          {
+            "node": "Formatter",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatter": {
+      "main": [
+        [
+          {
+            "node": "Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase": {
+      "main": [
+        [
+          {
+            "node": "Supabase1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "4a1c7344-9c0a-420f-a474-3a1f9792bf5e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "89ddddfba8d870bb904e2070b342d6e3bd595dc49e89131cde59469edd32e972"
+  },
+  "id": "MT1L5LPacSKzjc9G",
+  "tags": []
+}
