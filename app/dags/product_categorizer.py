@@ -3,6 +3,7 @@ import os
 import re
 from collections import defaultdict
 from dataclasses import dataclass
+from pathlib import Path
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -72,7 +73,7 @@ class CategorySearch:
 
         try:
             # 카테고리 데이터 로드
-            category_response = self.supabase.table("categories").select("*").execute()
+            category_response = self.supabase.table("order_product").select("*").execute()
             category_df = pd.DataFrame(category_response.data)
 
             # 카테고리 데이터 처리
@@ -178,7 +179,7 @@ class CategorySearch:
         """카테고리 분류 결과를 Supabase에 저장"""
         try:
             data = result.to_dict()
-            self.supabase.table("product_categories").insert(data).execute()
+            self.supabase.table("order_product").insert(data).execute()
             logger.info(f"Saved category result for: {result.text}")
         except Exception as e:
             logger.error(f"Error saving category result: {e!s}")

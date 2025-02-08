@@ -119,7 +119,6 @@ def ocr_image(image_path):
 
 
 def main():
-    """메인 실행 함수"""
     global supabase
 
     # .env 파일 로드 및 Supabase 초기화
@@ -151,7 +150,6 @@ def main():
                 if result:
                     rankings = extract_data(result, i)
                     if rankings:
-                        save_to_supabase(rankings)
                         all_products.extend(rankings)  # 제품 정보 저장
             else:
                 failed_urls.append(url)
