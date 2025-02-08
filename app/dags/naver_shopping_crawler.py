@@ -13,13 +13,9 @@ from supabase import create_client
 from tqdm import tqdm
 from webdriver_manager.chrome import ChromeDriverManager
 
-ROOT_DIR = Path(__file__).parents[1]
-load_dotenv(ROOT_DIR / ".env")
-
-supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
-
 
 def setup_chrome_options():
+    """Chrome 브라우저 옵션 설정"""
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--disable-gpu")
@@ -32,6 +28,7 @@ def setup_chrome_options():
 
 
 def capture_screenshot(driver, url, output_file):
+    """웹페이지 스크린샷 캡처 및 크롭"""
     try:
         driver.get(url)
         time.sleep(3)
@@ -51,6 +48,7 @@ CATEGORIES = ["패션 잡화", "화장품 미용", "디지털 가전", "가구 �
 
 
 def extract_data(ocr_result, category_idx):
+    """OCR 결과에서 데이터 추출"""
     current_date = datetime.now().strftime("%y-%m-%d")
     lines = ocr_result["pages"][0]["text"].split("\n")
 
@@ -74,7 +72,7 @@ def extract_data(ocr_result, category_idx):
 
 
 def trigger_n8n_webhook():
-    # n8n webhook URL
+    """n8n webhook 트리거"""
     webhook_url = "http://localhost:5678/webhook/trending"
     try:
         response = requests.post(webhook_url)
@@ -87,11 +85,12 @@ def trigger_n8n_webhook():
 
 
 def save_to_supabase(rankings):
+    """Supabase에 데이터 저장"""
     try:
         if rankings:
             result = supabase.table("trend_product").insert(rankings).execute()
             print(f"Saved {len(rankings)} items")
-            trigger_n8n_webhook()  # db 저장 후 n8n workflow trigger
+            trigger_n8n_webhook()
             return result
     except Exception as e:
         print(f"Database error: {e}")
@@ -99,6 +98,7 @@ def save_to_supabase(rankings):
 
 
 def ocr_image(image_path):
+    """이미지 OCR 처리"""
     api_key = os.getenv("UPSTAGE_API_KEY")
     url = os.getenv("UPSTAGE_OCR_URL")
     headers = {"Authorization": f"Bearer {api_key}"}
@@ -119,8 +119,18 @@ def ocr_image(image_path):
 
 
 def main():
-    screenshots_dir = Path(__file__).parent / "src"
+    """메인 실행 함수"""
+    global supabase
 
+    # .env 파일 로드 및 Supabase 초기화
+    root_dir = Path(__file__).parents[2]
+    load_dotenv(root_dir / ".env")
+    supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+
+    screenshots_dir = Path(__file__).parent / "src"
+    all_products = []  # 모든 제품 정보를 저장할 리스트
+
+    # 스크린샷 디렉토리 초기화
     if screenshots_dir.exists():
         for file in screenshots_dir.glob("*"):
             file.unlink()
@@ -133,18 +143,19 @@ def main():
     try:
         base_url = os.getenv("BASE_URL")
         for i in tqdm(range(1, 10), desc="Processing"):
-        url = f"{base_url}{i}"
-        output_file = screenshots_dir / f"screenshot_{i:02d}.png"
+            url = f"{base_url}{i}"
+            output_file = screenshots_dir / f"screenshot_{i:02d}.png"
 
-        if capture_screenshot(driver, url, output_file):
-            result = ocr_image(output_file)
-            if result:
-                rankings = extract_data(result, i)
-                if rankings:
-                    save_to_supabase(rankings)
-        else:
-            failed_urls.append(url)
-        time.sleep(1)
+            if capture_screenshot(driver, url, output_file):
+                result = ocr_image(output_file)
+                if result:
+                    rankings = extract_data(result, i)
+                    if rankings:
+                        save_to_supabase(rankings)
+                        all_products.extend(rankings)  # 제품 정보 저장
+            else:
+                failed_urls.append(url)
+            time.sleep(1)
 
     except Exception as e:
         print(f"Main error: {e}")
@@ -153,6 +164,8 @@ def main():
 
     if failed_urls:
         print("\nFailed URLs:", *failed_urls, sep="\n")
+
+    return all_products  # 수집된 모든 제품 정보 반환
 
 
 if __name__ == "__main__":
