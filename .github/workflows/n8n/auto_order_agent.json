@@ -1,20 +1,6 @@
 {
-  "name": "My workflow",
+  "name": "auto_order_agent",
   "nodes": [
-    {
-      "parameters": {
-        "language": "python",
-        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\n\nimport json\nimport re\n\nquantities = []\nitems = []\nids = []\nfor item in _input.all():\n  quantities.append(item.json.quantity)\n  items.append(item.json.item_list)\n  ids.append(item.json.id)\n\nfor item in _input.all():\n  matches = re.findall(r'Buy (\\w+) (Successfully|Fail):? ?(.*)', item.json.output)\n  item_code = \", \".join([match[0] for match in matches])\n  status = \", \".join([\"Success\" if match[1] == \"Successfully\" else \"Fail\" for match in matches])\n  purchase_statements = []\n  for i, match in enumerate(matches):\n    _item_code, _status, error_message = match\n    quantity = quantities[i]\n    _item = items[i]\n    if _status.lower() == \"successfully\":\n      purchase_statements.append(f\"Successfully purchased {quantity} units of {_item}(item code : {_item_code})\")\n    else:\n      purchase_statements.append(f\"Failed to purchase {quantity} units of {_item}(error : {error_message.strip()})\")\n  chat_input = \", \".join(purchase_statements)\n  \n  item.json.item_code = item_code\n  item.json.item_status = status\n  item.json.chatInput = chat_input\n  del item.json.status\n  del item.json.message\nid = \", \".join(ids)\nitem.json.id = id\nreturn item"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        620,
-        120
-      ],
-      "id": "c844e64c-e52c-4800-9882-2a1938282ed6",
-      "name": "Code"
-    },
     {
       "parameters": {
         "rule": {
@@ -28,10 +14,10 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        -640,
-        60
+        -780,
+        -120
       ],
-      "id": "3b0f0d84-cc39-4372-b6b0-d343e49c8ba5",
+      "id": "a223a2ea-2416-4060-b5b2-3e27dab2c2a7",
       "name": "Schedule Trigger"
     },
     {
@@ -43,35 +29,11 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
       "position": [
-        420,
-        120
-      ],
-      "id": "bda77a13-0108-44f9-9b84-c10d9942c591",
-      "name": "Merge"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "http://host.docker.internal:8888/purchase",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "item_list",
-              "value": "={{ $json.item_list }}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
         200,
-        0
+        -120
       ],
-      "id": "b747dfd5-e667-4f38-ad37-b108541eef76",
-      "name": "Auto-Order-Agent"
+      "id": "ef599886-4671-465e-8ac4-49b9ada33cb0",
+      "name": "Merge"
     },
     {
       "parameters": {
@@ -96,21 +58,21 @@
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 1.8,
       "position": [
-        840,
-        20
+        540,
+        -120
       ],
-      "id": "08dffe31-9649-4ddb-95e4-3f014b564b5d",
+      "id": "fa0bda55-8f9d-4373-9ede-ee73652d11b8",
       "name": "OpenAI",
       "credentials": {
         "openAiApi": {
-          "id": "zZBQ8zL5qIAwKIVy",
+          "id": "fJonTdRHICWpXJAh",
           "name": "OpenAi account"
         }
       }
     },
     {
       "parameters": {
-        "sendTo": "jangjang0022@gmail.com",
+        "sendTo": "taehan5479@gmail.com",
         "subject": "주간 물품 구매 결과 보고서",
         "emailType": "text",
         "message": "={{ $json.message.content }}",
@@ -121,15 +83,15 @@
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
       "position": [
-        1040,
-        20
+        700,
+        -120
       ],
-      "id": "917d903d-d9b7-4bcc-bf11-823f08669e22",
+      "id": "e30f8597-b304-492e-887a-05a3649327bf",
       "name": "Gmail",
       "webhookId": "7de19796-0312-439b-8b6f-2c5bb2c385ee",
       "credentials": {
         "gmailOAuth2": {
-          "id": "VQpeCvDhHsEsftS5",
+          "id": "ged36ZWz56iSUfsj",
           "name": "Gmail account"
         }
       }
@@ -163,10 +125,10 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -240,
-        140
+        -420,
+        -120
       ],
-      "id": "7f941315-985a-4d63-b23a-ed28f86b965a",
+      "id": "be2c0893-7bad-40e5-b641-d57271993314",
       "name": "order_list"
     },
     {
@@ -178,31 +140,17 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        -440,
-        60
+        -600,
+        -120
       ],
-      "id": "a23b1922-a4c1-4cc1-abff-c9ed0bd8f5b5",
+      "id": "4096ccd0-8383-49a8-b50d-a69bf600ba7b",
       "name": "Supabase1",
       "credentials": {
         "supabaseApi": {
-          "id": "gl4REHd2T6kxumS7",
+          "id": "Pt6nV2B9ZR7Nq7KD",
           "name": "Supabase account"
         }
       }
-    },
-    {
-      "parameters": {
-        "language": "python",
-        "pythonCode": "item_lists = []\n# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  item_lists.append(item.json.item_list)\nitem.json.item_list = \",\".join(item_lists)\ndel(item.json.quantity)\nreturn item"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        0,
-        0
-      ],
-      "id": "af294f3a-8556-4715-b5c7-c13413fbda28",
-      "name": "Code2"
     },
     {
       "parameters": {
@@ -222,17 +170,237 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        -400,
-        460
+        -180,
+        160
       ],
-      "id": "c785d90f-530f-4f18-98d5-adcf997ffaf2",
+      "id": "1002ad6c-4077-4801-bba0-ca70a44413d3",
       "name": "Supabase",
       "credentials": {
         "supabaseApi": {
-          "id": "gl4REHd2T6kxumS7",
+          "id": "Pt6nV2B9ZR7Nq7KD",
           "name": "Supabase account"
         }
       }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "product_inventory",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        },
+        "dataToSend": "autoMapInputData"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        540,
+        180
+      ],
+      "id": "95a506a6-15ce-4812-a3c5-37605d1933c4",
+      "name": "Supabase2",
+      "credentials": {
+        "supabaseApi": {
+          "id": "Pt6nV2B9ZR7Nq7KD",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "product_inventory",
+        "returnAll": true,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -20,
+        240
+      ],
+      "id": "81f0da04-96b7-457d-a33c-d57fe6fca31f",
+      "name": "Supabase3",
+      "credentials": {
+        "supabaseApi": {
+          "id": "Pt6nV2B9ZR7Nq7KD",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  item.json.value = item.json.quantity\n  del item.json.main\n  del item.json.sub1\n  del item.json.sub2\n  del item.json.sub3\n  del item.json.quantity\nreturn _input.all()"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        340,
+        180
+      ],
+      "id": "6910521b-f8a2-4f65-bcfb-4ca08d22d171",
+      "name": "Code3"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "=id",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        200,
+        180
+      ],
+      "id": "28363713-6735-4e4c-a260-979a1663929d",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/api/auto_orders",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"items\": [\n    {\n      \"id\": {{ $json.id }},\n      \"value\": {{ $json.value }},\n      \"is_orderable\": {{ $json.is_orderable }}\n    }\n  ]\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        180
+      ],
+      "id": "ae390222-dd06-4744-ab21-8a9de104f7e7",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "content": "### 주문 목록 불러오기 \norder_product 테이블 정보 읽어오기",
+        "height": 240,
+        "width": 360,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -640,
+        -200
+      ],
+      "typeVersion": 1,
+      "id": "9f28e5b1-1b32-47e3-b819-e920cbb1fabd",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "### 주문 에이전트\nOrder_Agent를 활용해 자동화된 주문 실행",
+        "height": 240,
+        "width": 380,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -240,
+        -300
+      ],
+      "typeVersion": 1,
+      "id": "e9553bef-fe29-4b83-8a74-90364224d9ce",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8888/purchase",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "item_list",
+              "value": "={{ $json.item_list }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -20,
+        -220
+      ],
+      "id": "ce1e9903-8a63-43b9-84d0-f95916ff95ff",
+      "name": "Order-Agent"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\n\nimport json\nimport re\n\nquantities = []\nitems = []\nids = []\nfor item in _input.all():\n  quantities.append(item.json.quantity)\n  items.append(item.json.item_list)\n  ids.append(item.json.id)\n\nfor item in _input.all():\n  matches = re.findall(r'Buy (\\w+) (Successfully|Fail):? ?(.*)', item.json.output)\n  item_code = \", \".join([match[0] for match in matches])\n  status = \", \".join([\"Success\" if match[1] == \"Successfully\" else \"Fail\" for match in matches])\n  purchase_statements = []\n  for i, match in enumerate(matches):\n    _item_code, _status, error_message = match\n    quantity = quantities[i]\n    _item = items[i]\n    if _status.lower() == \"successfully\":\n      purchase_statements.append(f\"Successfully purchased {quantity} units of {_item}(item code : {_item_code})\")\n    else:\n      purchase_statements.append(f\"Failed to purchase {quantity} units of {_item}(error : {error_message.strip()})\")\n  chat_input = \", \".join(purchase_statements)\n  \n  item.json.item_code = item_code\n  item.json.item_status = status\n  item.json.chatInput = chat_input\n  del item.json.status\n  del item.json.message\nid = \", \".join(ids)\nitem.json.id = id\nreturn item"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        340,
+        -120
+      ],
+      "id": "bf8aa5b6-b8df-4ee6-91d3-30978f095ca9",
+      "name": "Log Parser"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "item_lists = []\n# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  item_lists.append(item.json.item_list)\nitem.json.item_list = \",\".join(item_lists)\ndel(item.json.quantity)\nreturn item"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        -220
+      ],
+      "id": "0cee582d-46cc-4435-990d-1ef9abdd39bc",
+      "name": "Formatter1"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "\n# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  id_str = item.json.id\n  item_status_str = item.json.item_status\n  ids = id_str.split(', ')\n  item_status = item_status_str.split(', ')\n  \noutput = []\nfor i in range(len(ids)):\n  output.append({\n    \"id\": ids[i],\n    \"status\": item_status[i]\n  })\nreturn output"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -600,
+        180
+      ],
+      "id": "4c8b25d6-40bd-4ee4-87b6-a15b22ddae73",
+      "name": "Formatter2"
+    },
+    {
+      "parameters": {
+        "content": "### 메일 알림 발송\n관리자 이메일로 주문 정보 알림 발송",
+        "height": 240,
+        "width": 660
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        180,
+        -200
+      ],
+      "typeVersion": 1,
+      "id": "6c2d103a-6c77-4ddd-b4d3-72c77947276f",
+      "name": "Sticky Note2"
     },
     {
       "parameters": {
@@ -262,152 +430,31 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1040,
-        220
+        -420,
+        180
       ],
-      "id": "ed41ebf0-3fad-4320-9288-3f39caa1e544",
-      "name": "If"
+      "id": "070ddbb5-dd47-4006-bb07-39e0a0d62888",
+      "name": "Check Order"
     },
     {
       "parameters": {
-        "operation": "update",
-        "tableId": "product_inventory",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "id",
-              "condition": "eq",
-              "keyValue": "={{ $json.id }}"
-            }
-          ]
-        },
-        "dataToSend": "autoMapInputData"
+        "content": "### 주문 정보를 DB 및 대시보드에 반영\norder_product, product_inventory 테이블 값 업데이트 및 대시보드에 주문 정보 전달",
+        "height": 320,
+        "width": 1480,
+        "color": 4
       },
-      "type": "n8n-nodes-base.supabase",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -640,
+        80
+      ],
       "typeVersion": 1,
-      "position": [
-        400,
-        460
-      ],
-      "id": "25a1d46a-da9f-414f-8c38-3f0f569ae5b2",
-      "name": "Supabase2",
-      "credentials": {
-        "supabaseApi": {
-          "id": "gl4REHd2T6kxumS7",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "language": "python",
-        "pythonCode": "\n# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  id_str = item.json.id\n  item_status_str = item.json.item_status\n  ids = id_str.split(', ')\n  item_status = item_status_str.split(', ')\n  \noutput = []\nfor i in range(len(ids)):\n  output.append({\n    \"id\": ids[i],\n    \"status\": item_status[i]\n  })\nreturn output"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        840,
-        200
-      ],
-      "id": "9f7abe02-0fea-4b02-b305-74fe92f1a809",
-      "name": "Code1"
-    },
-    {
-      "parameters": {
-        "operation": "getAll",
-        "tableId": "product_inventory",
-        "returnAll": true,
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "id",
-              "condition": "eq",
-              "keyValue": "={{ $json.id }}"
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        -200,
-        580
-      ],
-      "id": "9d3a83fb-7855-46c1-aded-beeadeb51ef8",
-      "name": "Supabase3",
-      "credentials": {
-        "supabaseApi": {
-          "id": "gl4REHd2T6kxumS7",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "language": "python",
-        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  item.json.value = item.json.quantity\n  del item.json.main\n  del item.json.sub1\n  del item.json.sub2\n  del item.json.sub3\n  del item.json.quantity\nreturn _input.all()"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        180,
-        460
-      ],
-      "id": "0a06f03a-8619-4af7-b9f9-4bc48480ef2f",
-      "name": "Code3"
-    },
-    {
-      "parameters": {
-        "mode": "combine",
-        "fieldsToMatchString": "=id",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3,
-      "position": [
-        -40,
-        440
-      ],
-      "id": "12249c9c-264c-4375-98c4-f033b188a3d0",
-      "name": "Merge1"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "http://host.docker.internal:8000/api/auto_orders",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"items\": [\n    {\n      \"id\": {{ $json.id }},\n      \"value\": {{ $json.value }},\n      \"is_orderable\": {{ $json.is_orderable }}\n    }\n  ]\n}\n",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        620,
-        460
-      ],
-      "id": "9fc1be20-1e2c-410e-b3d1-f0d69383096d",
-      "name": "HTTP Request"
+      "id": "8d351932-5741-43aa-9ac0-c5792acb503d",
+      "name": "Sticky Note3"
     }
   ],
   "pinData": {},
   "connections": {
-    "Code": {
-      "main": [
-        [
-          {
-            "node": "OpenAI",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Code1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Schedule Trigger": {
       "main": [
         [
@@ -419,22 +466,11 @@
         ]
       ]
     },
-    "Auto-Order-Agent": {
-      "main": [
-        [
-          {
-            "node": "Merge",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Merge": {
       "main": [
         [
           {
-            "node": "Code",
+            "node": "Log Parser",
             "type": "main",
             "index": 0
           }
@@ -461,7 +497,7 @@
             "index": 1
           },
           {
-            "node": "Code2",
+            "node": "Formatter1",
             "type": "main",
             "index": 0
           }
@@ -479,17 +515,6 @@
         ]
       ]
     },
-    "Code2": {
-      "main": [
-        [
-          {
-            "node": "Auto-Order-Agent",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Supabase": {
       "main": [
         [
@@ -500,28 +525,6 @@
           },
           {
             "node": "Merge1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "If": {
-      "main": [
-        [
-          {
-            "node": "Supabase",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Code1": {
-      "main": [
-        [
-          {
-            "node": "If",
             "type": "main",
             "index": 0
           }
@@ -571,17 +574,77 @@
           }
         ]
       ]
+    },
+    "Order-Agent": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Parser": {
+      "main": [
+        [
+          {
+            "node": "OpenAI",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Formatter2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatter1": {
+      "main": [
+        [
+          {
+            "node": "Order-Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatter2": {
+      "main": [
+        [
+          {
+            "node": "Check Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Order": {
+      "main": [
+        [
+          {
+            "node": "Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "7c23d2e0-e9f4-4dc8-aa03-6aa864bf5414",
+  "versionId": "df34130a-8072-4f84-ab2a-dec541a406c1",
   "meta": {
     "templateCredsSetupCompleted": true,
-    "instanceId": "ffc0dae1a216a08b6c96e063cc922b10ce0f1571a3cf1ec1540f1d8196c89e73"
+    "instanceId": "89ddddfba8d870bb904e2070b342d6e3bd595dc49e89131cde59469edd32e972"
   },
-  "id": "6DJ8Y6XDGn3wifyB",
+  "id": "NJqjKz5FPRuMn2qi",
   "tags": []
 }

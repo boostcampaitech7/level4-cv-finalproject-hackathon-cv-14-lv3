@@ -1,19 +1,6 @@
 {
-  "name": "recall_agent",
+  "name": "recall_workflow",
   "nodes": [
-    {
-      "parameters": {
-        "inputSource": "passthrough"
-      },
-      "id": "a24a8bc4-805e-4d3e-9960-ad20699bd5b8",
-      "typeVersion": 1.1,
-      "name": "Workflow Input Trigger",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "position": [
-        0,
-        0
-      ]
-    },
     {
       "parameters": {
         "url": "https://r.jina.ai/https://www.safetykorea.kr/recall/recallBoard",
@@ -25,7 +12,7 @@
         220,
         0
       ],
-      "id": "6b0dc21a-570c-422d-9ccd-48a51d6afa92",
+      "id": "468eb1f4-1c3d-4fa0-9f51-05f5ccd7e9a9",
       "name": "[Jina AI] HTTP Request"
     },
     {
@@ -42,9 +29,9 @@
       "typeVersion": 1.2,
       "position": [
         0,
-        200
+        0
       ],
-      "id": "300c6235-df87-45a3-8f04-4b97b81ccbb1",
+      "id": "cd25d122-4a90-4661-b407-f4f772f02137",
       "name": "Schedule Trigger"
     },
     {
@@ -58,12 +45,12 @@
         440,
         0
       ],
-      "id": "f602516b-400e-4d7f-9435-080a40244a6d",
+      "id": "1e7bfe8f-d53f-4b19-ad7e-f3e2ba321e55",
       "name": "Extracter & Parser"
     },
     {
       "parameters": {
-        "sendTo": "yynk2012@gmail.com",
+        "sendTo": "taehan5479@gmail.com",
         "subject": "={{ $json.subject }}",
         "emailType": "text",
         "message": "={{ $json.body }}",
@@ -77,7 +64,7 @@
         820,
         0
       ],
-      "id": "1883b9d7-9ce8-43a5-baf0-bb07a19a5688",
+      "id": "e4c5e6e8-87f0-441d-b851-fc17fdd7de3c",
       "name": "Gmail",
       "webhookId": "7c4f758c-d2b5-4a71-84d3-9536cd3baca5",
       "alwaysOutputData": false,
@@ -99,7 +86,7 @@
         620,
         0
       ],
-      "id": "71a5fc7d-34b1-40b6-b6d2-1f36f4dbc4bf",
+      "id": "de544bd6-4b27-407e-8e7a-5706a480a936",
       "name": "Formatter",
       "alwaysOutputData": true
     },
@@ -132,9 +119,9 @@
       "typeVersion": 2.2,
       "position": [
         620,
-        220
+        260
       ],
-      "id": "cce47ccc-cd3d-4399-9a3c-fc1d8394a56c",
+      "id": "5e56ae5e-ded1-490d-bd3b-87e05f2b4a89",
       "name": "If"
     },
     {
@@ -155,9 +142,9 @@
       "typeVersion": 1,
       "position": [
         820,
-        200
+        260
       ],
-      "id": "48a9ed56-9ade-40cd-8281-cf77a2b4d1da",
+      "id": "a94d3deb-f7a1-4173-a4a8-24f1f5843b85",
       "name": "Supabase",
       "credentials": {
         "supabaseApi": {
@@ -183,7 +170,7 @@
           "fieldValues": [
             {
               "fieldId": "is_orderable",
-              "fieldValue": "true"
+              "fieldValue": "false"
             }
           ]
         }
@@ -191,10 +178,10 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        1060,
-        200
+        1020,
+        260
       ],
-      "id": "1b35a9cc-f6bc-41bb-905f-b2b6d93a30a9",
+      "id": "294b2af1-fb16-41a0-92f6-1ff03c7f6fea",
       "name": "Supabase1",
       "credentials": {
         "supabaseApi": {
@@ -202,21 +189,57 @@
           "name": "Supabase account"
         }
       }
+    },
+    {
+      "parameters": {
+        "content": "### 리콜 상품 불러오기\n제품안전정보센터 내 공시된 리콜 상품 리스트 크롤링",
+        "height": 240,
+        "width": 420,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        160,
+        -80
+      ],
+      "typeVersion": 1,
+      "id": "158d57f1-89f5-4478-9672-68816555e05f",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "### 메일 알림 발송\n관리자 이메일로 리콜 정보 알림 발송",
+        "height": 240,
+        "width": 340
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        600,
+        -80
+      ],
+      "typeVersion": 1,
+      "id": "98b857db-3d50-45ec-ba27-9da889300dd5",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "### DB에 반영\nproduct_inventory 테이블 내 is_orderable 값 변경",
+        "height": 240,
+        "width": 540,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        600,
+        180
+      ],
+      "typeVersion": 1,
+      "id": "25d74761-8f00-4c59-8a82-0e63a8bdf89f",
+      "name": "Sticky Note2"
     }
   ],
   "pinData": {},
   "connections": {
-    "Workflow Input Trigger": {
-      "main": [
-        [
-          {
-            "node": "[Jina AI] HTTP Request",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "[Jina AI] HTTP Request": {
       "main": [
         [
@@ -293,11 +316,11 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "557dbaad-99f0-4b49-930f-10bab29daaa2",
+  "versionId": "4a1c7344-9c0a-420f-a474-3a1f9792bf5e",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "89ddddfba8d870bb904e2070b342d6e3bd595dc49e89131cde59469edd32e972"
   },
-  "id": "Y51rVOPATKAhdyhD",
+  "id": "MT1L5LPacSKzjc9G",
   "tags": []
 }

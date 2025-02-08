@@ -1,5 +1,5 @@
 {
-  "name": "Trend_Mail",
+  "name": "trend_send_mail",
   "nodes": [
     {
       "parameters": {
@@ -10,15 +10,15 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        180,
-        0
+        700,
+        -160
       ],
-      "id": "29b87532-eb37-4c0a-b294-cc9d8f8f102a",
+      "id": "80dad646-0e54-4716-ad59-86072f61c952",
       "name": "Supabase",
       "credentials": {
         "supabaseApi": {
-          "id": "2j3yxKXteM2AQtyI",
-          "name": "Supabase account-gorani"
+          "id": "Pt6nV2B9ZR7Nq7KD",
+          "name": "Supabase account"
         }
       }
     },
@@ -31,10 +31,10 @@
       "type": "n8n-nodes-base.aggregate",
       "typeVersion": 1,
       "position": [
-        340,
-        0
+        860,
+        -160
       ],
-      "id": "4c853b70-e7b5-42fc-9413-6c77dbfb7234",
+      "id": "295e2c94-ca1f-4908-8272-46921f9880cd",
       "name": "Aggregate"
     },
     {
@@ -44,10 +44,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        500,
-        0
+        1020,
+        -160
       ],
-      "id": "f62d91bc-4652-4cd5-a689-102f8f5e75be",
+      "id": "a9c8d1f7-2109-4d5d-81fb-fc958e5e0cd2",
       "name": "Info_Extractor"
     },
     {
@@ -57,15 +57,15 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        660,
-        0
+        1180,
+        -160
       ],
-      "id": "95b83456-5635-4ffe-9a76-5ce739b57fdd",
+      "id": "8aa6af37-74ed-4960-862b-42d6525f6cc7",
       "name": "Abstract_Info"
     },
     {
       "parameters": {
-        "sendTo": "mcw1156@gmail.com",
+        "sendTo": "taehan5479@gmail.com",
         "subject": "={{ $json.email_data.subject }}",
         "emailType": "text",
         "message": "={{ $json.email_data.body }}",
@@ -76,15 +76,15 @@
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
       "position": [
-        840,
-        0
+        1340,
+        -160
       ],
-      "id": "9a802988-795d-498d-ae68-9dac216401a9",
+      "id": "04a7a220-1910-45a9-b11c-b10e9e02b196",
       "name": "Send_Trend_Info",
       "webhookId": "39c1f4f0-bd62-4959-a948-06a551cdbfeb",
       "credentials": {
         "gmailOAuth2": {
-          "id": "lFQP0GzTx7HvHCM0",
+          "id": "ged36ZWz56iSUfsj",
           "name": "Gmail account"
         }
       }
@@ -98,12 +98,43 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        0,
-        0
+        520,
+        -160
       ],
-      "id": "cc312829-8528-49ba-8cbc-3135192a29a9",
+      "id": "b61a09c9-205c-4a1a-a734-109f936cb152",
       "name": "Webhook",
       "webhookId": "cdb69a71-57fd-4ccb-ac47-878e9b855b60"
+    },
+    {
+      "parameters": {
+        "content": "### 트렌드 상품 불러오기\nDB의 trend_product 테이블 값 불러오기",
+        "height": 240,
+        "width": 300,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        680,
+        -240
+      ],
+      "typeVersion": 1,
+      "id": "acf14e2e-f4fb-4dd8-a36b-628e2501fa84",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "### 메일 알림 발송\n관리자 이메일로 트렌드 상품 보고서 발송",
+        "height": 240,
+        "width": 460
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1000,
+        -240
+      ],
+      "typeVersion": 1,
+      "id": "e3f4ce9c-d7ad-42a1-a6c8-81e5aa24ef5e",
+      "name": "Sticky Note1"
     }
   ],
   "pinData": {},
@@ -164,15 +195,15 @@
       ]
     }
   },
-  "active": true,
+  "active": false,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "ddfe85c5-be6a-4c2f-9b6c-bf781d2545f8",
+  "versionId": "31dbd5ac-1d85-4640-86f4-c5d0a1c5283a",
   "meta": {
     "templateCredsSetupCompleted": true,
-    "instanceId": "2bf14225034dfb2d8498032d805718ab7af6ff6458c61a42e219515f095f1c9f"
+    "instanceId": "89ddddfba8d870bb904e2070b342d6e3bd595dc49e89131cde59469edd32e972"
   },
-  "id": "PGYelhYwSyF65c4R",
+  "id": "PNhZwCY2KvprvWob",
   "tags": []
 }
