@@ -1,4 +1,4 @@
-import React, { useState, useEffect,useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { saveAs } from "file-saver";
 import Papa from "papaparse";
 
@@ -32,7 +32,7 @@ const InventoryPage = () => {
 
 
   // ✅ WebSocket 연결
-  useEffect(() => { 
+  useEffect(() => {
     const ws = new WebSocket("ws://127.0.0.1:8000/ws/auto_orders");
 
     ws.onmessage = (event) => {
@@ -74,16 +74,16 @@ const InventoryPage = () => {
       if (sub1 !== "All" && sub1 !== "전체 중분류") params.push(`sub1=${encodeURIComponent(sub1)}`);
       if (sub2 !== "All" && sub2 !== "전체 소분류") params.push(`sub2=${encodeURIComponent(sub2)}`);
       if (params.length > 0) url += `?${params.join("&")}`;
-  
+
       const response = await fetch(url);
       const data = await response.json();
-  
+
       if (data.status === "success") {
         // ✅ 기존 선택값 유지
         setMainCategories((prev) => ["전체 대분류", ...(data.filters.main || [])]);
         setSub1Categories((prev) => ["전체 중분류", ...(data.filters.sub1 || [])]);
         setSub2Categories((prev) => ["전체 소분류", ...(data.filters.sub2 || [])]);
-  
+
         return data.filters;
       }
     } catch (error) {
@@ -91,38 +91,38 @@ const InventoryPage = () => {
     }
     return { main: [], sub1: [], sub2: [] };
   };
-  
-  
-  
+
+
+
   const handleMainCategoryChange = async (e) => {
     const value = e.target.value;
     setSelectedMain(value);  // 선택한 값 유지
     setSelectedSub1("전체 중분류"); // 하위 카테고리 초기화
     setSelectedSub2("전체 소분류"); // 하위 카테고리 초기화
-  
+
     const filters = await fetchCategoryFilters(value === "전체 대분류" ? "All" : value, "All", "All");
     setSub1Categories(["전체 중분류", ...(filters.sub1 || [])]);
     setSub2Categories(["전체 소분류", ...(filters.sub2 || [])]);
-  
+
     // 기존 필터 유지하면서 적용
     applyFilters(inventory, searchQuery, value, "전체 중분류", "전체 소분류");
   };
-  
+
   const handleSub1CategoryChange = async (e) => {
     const value = e.target.value;
-    setSelectedSub1(value); 
+    setSelectedSub1(value);
     setSelectedSub2("전체 소분류"); // 하위 카테고리 초기화
-  
+
     const filters = await fetchCategoryFilters(
       selectedMain === "전체 대분류" ? "All" : selectedMain,
       value === "전체 중분류" ? "All" : value,
       "All"
     );
     setSub2Categories(["전체 소분류", ...(filters.sub2 || [])]);
-  
+
     applyFilters(inventory, searchQuery, selectedMain, value, "전체 소분류");
   };
-  
+
   const handleSub2CategoryChange = (e) => {
     const value = e.target.value;
     setSelectedSub2(value);
@@ -134,7 +134,7 @@ const InventoryPage = () => {
       setMainCategories(["전체 대분류", ...(categoryData.main || [])]);
       setSub1Categories(["전체 중분류", ...(categoryData.sub1 || [])]);
       setSub2Categories(["전체 소분류", ...(categoryData.sub2 || [])]);
-  
+
       const reorderData = await fetchReorderPoints();
       if (Object.keys(reorderData).length > 0) {
         await fetchInventory(reorderData);
@@ -142,7 +142,7 @@ const InventoryPage = () => {
     };
     initializeData();
   }, []);
-  
+
   useEffect(() => {
     // ✅ `sortConfig`에 맞춰 데이터 정렬
     if (sortConfig.field) {
@@ -150,18 +150,18 @@ const InventoryPage = () => {
         return [...prevInventory].sort((a, b) => {
           const aValue = parseFloat(a[sortConfig.field]) || 0;
           const bValue = parseFloat(b[sortConfig.field]) || 0;
-  
+
           return sortConfig.order === "asc" ? aValue - bValue : bValue - aValue;
         });
       });
     }
   }, [sortConfig, inventory]);  // ✅ inventory가 바뀌면 정렬 다시 적용
-  
-  
 
 
-  
-  
+
+
+
+
   // ✅ 날짜 형식 변환 함수 추가
   const convertDateFormat = (dateStr) => {
     // "2022-02" → "22_m02"
@@ -205,68 +205,68 @@ const InventoryPage = () => {
 
 
 
-useEffect(() => {
-  const updateReorderData = async () => {
+  useEffect(() => {
+    const updateReorderData = async () => {
+      const reorderData = await fetchReorderPoints();
+      if (Object.keys(reorderData).length > 0) {
+        await fetchInventory(reorderData);
+      }
+    };
+    updateReorderData();
+  }, [startMonth, endMonth]);
+
+
+  const handleSort = useCallback((field) => {
+    setKeepLowStockTop(false);
+
+    setSortConfig((prevConfig) => {
+      const isSameField = prevConfig.field === field;
+      const newOrder = isSameField && prevConfig.order === "asc" ? "desc" : "asc";
+
+      setSortField(field);
+      setSortOrder(newOrder);
+
+      setFilteredInventory((prevInventory) => {
+        return [...prevInventory].sort((a, b) => {
+          const aValue = parseFloat(a[field]) || 0;
+          const bValue = parseFloat(b[field]) || 0;
+          return newOrder === "asc" ? aValue - bValue : bValue - aValue;
+        });
+      });
+
+      return { field, order: newOrder };
+    });
+  }, []);
+
+
+
+
+
+  const handleResetSort = async () => {
+    setSortConfig({ field: "value", order: "asc" });
+    setSortField("value");
+    setSortOrder("asc");
+
+    setSelectedMain("전체 대분류");
+    setSelectedSub1("전체 중분류");
+    setSelectedSub2("전체 소분류");
+
+    const categoryData = await fetchCategoryFilters("All", "All", "All");
+    setMainCategories(["전체 대분류", ...(categoryData.main || [])]);
+    setSub1Categories(["전체 중분류", ...(categoryData.sub1 || [])]);
+    setSub2Categories(["전체 소분류", ...(categoryData.sub2 || [])]);
+
+    setSearchQuery("");
+    const searchInput = document.querySelector('.search-bar input');
+    if (searchInput) {
+      searchInput.value = '';
+    }
+
     const reorderData = await fetchReorderPoints();
     if (Object.keys(reorderData).length > 0) {
       await fetchInventory(reorderData);
     }
   };
-  updateReorderData();
-}, [startMonth, endMonth]);
-
-
-const handleSort = useCallback((field) => {
-  setKeepLowStockTop(false);
-
-  setSortConfig((prevConfig) => {
-    const isSameField = prevConfig.field === field;
-    const newOrder = isSameField && prevConfig.order === "asc" ? "desc" : "asc";
-
-    setSortField(field);
-    setSortOrder(newOrder);
-
-    setFilteredInventory((prevInventory) => {
-      return [...prevInventory].sort((a, b) => {
-        const aValue = parseFloat(a[field]) || 0;
-        const bValue = parseFloat(b[field]) || 0;
-        return newOrder === "asc" ? aValue - bValue : bValue - aValue;
-      });
-    });
-
-    return { field, order: newOrder };
-  });
-}, []);
-
-
-
-
-
-const handleResetSort = async () => {
-  setSortConfig({ field: "value", order: "asc" });
-  setSortField("value");
-  setSortOrder("asc");
-
-  setSelectedMain("전체 대분류");
-  setSelectedSub1("전체 중분류");
-  setSelectedSub2("전체 소분류");
-
-  const categoryData = await fetchCategoryFilters("All", "All", "All");
-  setMainCategories(["전체 대분류", ...(categoryData.main || [])]);
-  setSub1Categories(["전체 중분류", ...(categoryData.sub1 || [])]);
-  setSub2Categories(["전체 소분류", ...(categoryData.sub2 || [])]);
-
-  setSearchQuery("");
-  const searchInput = document.querySelector('.search-bar input');
-  if (searchInput) {
-    searchInput.value = '';
-  }
-
-  const reorderData = await fetchReorderPoints();
-  if (Object.keys(reorderData).length > 0) {
-    await fetchInventory(reorderData);
-  }
-};
 
 
 
@@ -276,25 +276,25 @@ const handleResetSort = async () => {
     try {
       let url = `http://127.0.0.1:8000/api/inventory`;
       const params = [];
-  
+
       if (main !== "All" && main !== "전체 대분류") params.push(`main=${encodeURIComponent(main)}`);
       if (sub1 !== "All" && sub1 !== "전체 중분류") params.push(`sub1=${encodeURIComponent(sub1)}`);
       if (sub2 !== "All" && sub2 !== "전체 소분류") params.push(`sub2=${encodeURIComponent(sub2)}`);
       if (params.length > 0) url += `?${params.join("&")}`;
-  
+
       const inventoryResponse = await fetch(url);
       const inventoryData = await inventoryResponse.json();
-  
+
       if (!Array.isArray(inventoryData)) {
         console.error("❌ 서버에서 유효한 인벤토리 데이터를 받지 못했습니다:", inventoryData);
         return;
       }
-  
+
       const filteredData = inventoryData.map((item) => ({
         ...item,
         sub3: item.sub3 || "제품명 없음",
       }));
-  
+
       const reorderPointsData = reorderData || reorderPoints;
       const mergedData = filteredData.map((item) => {
         const reorderInfo = reorderPointsData[item.id] || {};
@@ -307,29 +307,29 @@ const handleResetSort = async () => {
           orderStatus: item.isLowStock ? "❌ 미주문" : "-",
         };
       });
-  
+
       // ✅ 기본 정렬: `value` 오름차순
       const sortedData = [...mergedData].sort((a, b) => parseFloat(a.value) - parseFloat(b.value));
-  
+
       setInventory(sortedData);
       setFilteredInventory(sortedData);
     } catch (error) {
       console.error("❌ Error fetching inventory:", error);
     }
   };
-  
-  
+
+
 
   const getSortedInventory = () => {
     let sortedData = [...filteredInventory];
-  
+
     if (keepLowStockTop) {
       sortedData.sort((a, b) => {
         if (a.isLowStock === b.isLowStock) return 0;
         return a.isLowStock ? -1 : 1;  // ✅ 재고 부족 상품이 먼저 오도록 정렬
       });
     }
-  
+
     return sortedData;
   };
   const applyFilters = (data, query = searchQuery, main = selectedMain, sub1 = selectedSub1, sub2 = selectedSub2) => {
@@ -363,7 +363,7 @@ const handleResetSort = async () => {
 
     setFilteredInventory(filtered);
   };
-  
+
 
 
   // ✅ 월 선택 핸들러 - 상태 업데이트 및 데이터 즉시 갱신
@@ -408,7 +408,7 @@ const handleResetSort = async () => {
     setFilteredInventory(filtered);
   };
 
-  
+
   useEffect(() => {
     if (keepLowStockTop) {
       setFilteredInventory((prev) => {
@@ -420,7 +420,7 @@ const handleResetSort = async () => {
       });
     }
   }, [inventory]);  // ✅ `keepLowStockTop`이 변경될 때마다 자동으로 정렬되지 않도록 수정
- 
+
 
 
   //CSV 다운로드
@@ -469,38 +469,38 @@ const handleResetSort = async () => {
   // filteredInventory가 업데이트될 때마다 재고 부족 상품 자동 등록
   useEffect(() => {
     const updateOrderProducts = async () => {
-        try {
-            // 재고 부족 상품 필터링
-            const lowStockItems = filteredInventory
-                .filter(item => item.isLowStock)
-                .map(item => ({
-                    id: item.id,
-                    quantity: item.reorder_point * 2 - item.value  // 주문할 수량 계산
-                }));
+      try {
+        // 재고 부족 상품 필터링
+        const lowStockItems = filteredInventory
+          .filter(item => item.isLowStock)
+          .map(item => ({
+            id: item.id,
+            quantity: item.reorder_point // 주문할 수량 계산
+          }));
 
-            if (lowStockItems.length > 0) {
-                await fetch('http://127.0.0.1:8000/api/update-order-products', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(lowStockItems)
-                });
-            }
-        } catch (error) {
-            console.error("❌ 주문 목록 업데이트 중 오류:", error);
+        if (lowStockItems.length > 0) {
+          await fetch('http://127.0.0.1:8000/api/update-order-products', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(lowStockItems)
+          });
         }
+      } catch (error) {
+        console.error("❌ 주문 목록 업데이트 중 오류:", error);
+      }
     };
 
     if (filteredInventory.length > 0) {
-        updateOrderProducts();
+      updateOrderProducts();
     }
   }, [filteredInventory]);  // filteredInventory가 변경될 때마다 실행
 
   return (
     <div className="inventory-container">
       <h2>📦 재고 관리</h2>
-      
+
       {/* ✅ 월 선택 UI 추가 */}
       <div className="date-selection">
         <label>📅 시작 월: </label>
@@ -533,12 +533,12 @@ const handleResetSort = async () => {
             onChange={handleSearch}
           />
         </div>
-        
+
         <div className="category-filters">
           {/* 대분류 드롭다운 */}
           <div className="category-select">
-            <select 
-              value={selectedMain} 
+            <select
+              value={selectedMain}
               onChange={handleMainCategoryChange}
             >
               <option value="전체 대분류">{selectedMain === "전체 대분류" ? "대분류" : selectedMain}</option>
@@ -552,8 +552,8 @@ const handleResetSort = async () => {
 
           {/* 중분류 드롭다운 */}
           <div className="category-select">
-            <select 
-              value={selectedSub1} 
+            <select
+              value={selectedSub1}
               onChange={handleSub1CategoryChange}
             >
               <option value="전체 중분류">{selectedSub1 === "전체 중분류" ? "중분류" : selectedSub1}</option>
@@ -567,8 +567,8 @@ const handleResetSort = async () => {
 
           {/* 소분류 드롭다운 */}
           <div className="category-select">
-            <select 
-              value={selectedSub2} 
+            <select
+              value={selectedSub2}
               onChange={handleSub2CategoryChange}
             >
               <option value="전체 소분류">{selectedSub2 === "전체 소분류" ? "소분류" : selectedSub2}</option>
@@ -582,9 +582,9 @@ const handleResetSort = async () => {
         </div>
 
         <div className="button-group">
-        <button className="sort-button" onClick={() => handleSort("value")}>
-          {sortField === "value" && sortOrder === "asc" ? "📉 재고 내림차순" : "📈 재고 오름차순"}
-        </button>
+          <button className="sort-button" onClick={() => handleSort("value")}>
+            {sortField === "value" && sortOrder === "asc" ? "📉 재고 내림차순" : "📈 재고 오름차순"}
+          </button>
 
 
           <button className="sort-button" onClick={() => handleSort("monthly_avg_sales")}>
@@ -597,7 +597,7 @@ const handleResetSort = async () => {
           <button className="download-button" onClick={downloadCSV}>📥 CSV 다운로드</button>
         </div>
       </div>
-      
+
       <table className="inventory-table">
         <thead>
           <tr>
@@ -606,36 +606,36 @@ const handleResetSort = async () => {
             <th>일 평균 판매량</th>
             <th>재고량</th>
             <th>최소 재고 기준</th>
-            <th>상태</th> 
+            <th>상태</th>
             <th>주문 현황</th>
           </tr>
         </thead>
         <tbody>
-        {filteredInventory.map((item) => (
-          <tr 
-            key={item.id} 
-            className={item.isLowStock ? "low-stock" : ""}
-            style={{ 
-              backgroundColor: item.isLowStock ? '#fff3f3' : 'inherit'
-            }}
-          >
-            <td>{item.sub3}</td>
-            <td>{item.monthly_avg_sales.toFixed(1)}</td>
-            <td>{item.daily_avg_sales.toFixed(1)}</td>  
-            <td className={item.isLowStock ? "low-stock-text" : ""}>
-              {item.value}
-            </td>
-            <td className={item.isLowStock ? "low-stock-text" : ""}>
-              {item.reorder_point.toFixed(0)}
-            </td>
-            <td className={item.isLowStock ? "low-stock-text" : ""}>
-              {item.isLowStock ? "⚠️ 재고 부족" : "✅"}
-            </td>
-            <td className={autoOrders[item.id] ? "order-success" : item.isLowStock ? "low-stock-text" : ""}>
+          {filteredInventory.map((item) => (
+            <tr
+              key={item.id}
+              className={item.isLowStock ? "low-stock" : ""}
+              style={{
+                backgroundColor: item.isLowStock ? '#fff3f3' : 'inherit'
+              }}
+            >
+              <td>{item.sub3}</td>
+              <td>{item.monthly_avg_sales.toFixed(1)}</td>
+              <td>{item.daily_avg_sales.toFixed(1)}</td>
+              <td className={item.isLowStock ? "low-stock-text" : ""}>
+                {item.value}
+              </td>
+              <td className={item.isLowStock ? "low-stock-text" : ""}>
+                {item.reorder_point.toFixed(0)}
+              </td>
+              <td className={item.isLowStock ? "low-stock-text" : ""}>
+                {item.isLowStock ? "⚠️ 재고 부족" : "✅"}
+              </td>
+              <td className={autoOrders[item.id] ? "order-success" : item.isLowStock ? "low-stock-text" : ""}>
                 {autoOrders[item.id] ? "✅ 주문 완료" : item.isLowStock ? "❌ 미주문" : "-"}
               </td>
-          </tr>
-        ))}
+            </tr>
+          ))}
         </tbody>
       </table>
 
