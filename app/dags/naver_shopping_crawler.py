@@ -13,13 +13,9 @@ from supabase import create_client
 from tqdm import tqdm
 from webdriver_manager.chrome import ChromeDriverManager
 
-ROOT_DIR = Path(__file__).parents[1]
-load_dotenv(ROOT_DIR / ".env")
-
-supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
-
 
 def setup_chrome_options():
+    """Chrome 브라우저 옵션 설정"""
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--disable-gpu")
@@ -32,6 +28,7 @@ def setup_chrome_options():
 
 
 def capture_screenshot(driver, url, output_file):
+    """웹페이지 스크린샷 캡처 및 크롭"""
     try:
         driver.get(url)
         time.sleep(3)
@@ -47,13 +44,13 @@ def capture_screenshot(driver, url, output_file):
         return False
 
 
-def extract_data(ocr_result):
+CATEGORIES = ["패션 잡화", "화장품 미용", "디지털 가전", "가구 인테리어", "출산 육아", "식품", "스포츠 레저", "생활 건강", "여가 생활 편의"]
+
+
+def extract_data(ocr_result, category_idx):
+    """OCR 결과에서 데이터 추출"""
     current_date = datetime.now().strftime("%y-%m-%d")
     lines = ocr_result["pages"][0]["text"].split("\n")
-    category = next((line.split("인기검색어")[0].strip() for line in lines if "인기검색어" in line), None)
-
-    if not category:
-        return []
 
     valid_products = {}
     for line in lines:
@@ -69,14 +66,16 @@ def extract_data(ocr_result):
                         valid_products[rank] = product
 
     return sorted(
-        [{"category": category, "rank": rank, "product_name": product} for rank, product in valid_products.items()], key=lambda x: x["rank"]
+        [{"category": CATEGORIES[category_idx - 1], "rank": rank, "product_name": product} for rank, product in valid_products.items()],
+        key=lambda x: x["rank"],
     )
 
-def trigger_n8n_webhook():  
-    # n8n webhook URL
+
+def trigger_n8n_webhook():
+    """n8n webhook 트리거"""
     webhook_url = "http://localhost:5678/webhook/trending"
     try:
-        response = requests.post(webhook_url)
+        response = requests.post(webhook_url, timeout=30)
         if response.status_code == 200:
             print("N8n workflow triggered successfully")
         else:
@@ -84,12 +83,14 @@ def trigger_n8n_webhook():
     except Exception as e:
         print(f"Error triggering n8n workflow: {e!s}")
 
+
 def save_to_supabase(rankings):
+    """Supabase에 데이터 저장"""
     try:
         if rankings:
             result = supabase.table("trend_product").insert(rankings).execute()
             print(f"Saved {len(rankings)} items")
-            trigger_n8n_webhook() # db 저장 후 n8n workflow trigger
+            trigger_n8n_webhook()
             return result
     except Exception as e:
         print(f"Database error: {e}")
@@ -97,6 +98,7 @@ def save_to_supabase(rankings):
 
 
 def ocr_image(image_path):
+    """이미지 OCR 처리"""
     api_key = os.getenv("UPSTAGE_API_KEY")
     url = os.getenv("UPSTAGE_OCR_URL")
     headers = {"Authorization": f"Bearer {api_key}"}
@@ -104,7 +106,7 @@ def ocr_image(image_path):
     try:
         with open(image_path, "rb") as image_file:
             files = {"document": image_file}
-            response = requests.post(url, headers=headers, files=files)
+            response = requests.post(url, headers=headers, files=files, timeout=30)
 
         if response.status_code != 200:
             print(f"OCR error: {response.text}")
@@ -117,8 +119,17 @@ def ocr_image(image_path):
 
 
 def main():
-    screenshots_dir = Path(__file__).parent / "src"
+    global supabase
 
+    # .env 파일 로드 및 Supabase 초기화
+    env_path = Path(__file__).parents[2] / ".env"
+    load_dotenv(env_path)
+    supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+
+    screenshots_dir = Path(__file__).parent / "src"
+    all_products = []  # 모든 제품 정보를 저장할 리스트
+
+    # 스크린샷 디렉토리 초기화
     if screenshots_dir.exists():
         for file in screenshots_dir.glob("*"):
             file.unlink()
@@ -135,12 +146,11 @@ def main():
             output_file = screenshots_dir / f"screenshot_{i:02d}.png"
 
             if capture_screenshot(driver, url, output_file):
-                if i != 0:
-                    result = ocr_image(output_file)
-                    if result:
-                        rankings = extract_data(result)
-                        if rankings:
-                            save_to_supabase(rankings)
+                result = ocr_image(output_file)
+                if result:
+                    rankings = extract_data(result, i)
+                    if rankings:
+                        all_products.extend(rankings)  # 제품 정보 저장
             else:
                 failed_urls.append(url)
             time.sleep(1)
@@ -152,6 +162,8 @@ def main():
 
     if failed_urls:
         print("\nFailed URLs:", *failed_urls, sep="\n")
+
+    return all_products  # 수집된 모든 제품 정보 반환
 
 
 if __name__ == "__main__":

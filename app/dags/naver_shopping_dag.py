@@ -1,12 +1,14 @@
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from dotenv import load_dotenv
-from main import main as crawler_main
 
-# .env 파일 로드
+sys.path.append(str(Path(__file__).parents[2]))
+from naver_shopping_crawler import main as crawler_main
+
 root_dir = Path(__file__).parents[2]
 load_dotenv(root_dir / ".env")
 
@@ -32,6 +34,6 @@ with DAG(
             crawler_main()
             return "Crawling completed successfully"
         except Exception as e:
-            raise Exception(f"Crawling failed: {e!s}")
+            raise Exception(f"Crawling failed: {e!s}") from e
 
     crawl_operator = PythonOperator(task_id="crawl_naver_shopping", python_callable=crawl_task, dag=dag)

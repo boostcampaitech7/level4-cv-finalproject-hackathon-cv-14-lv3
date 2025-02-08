@@ -1,5 +1,5 @@
 ### 환경변수 설정
-실행을 위해서는 환경변수(.env) 파일이 Root directory에 필요합니다.
+실행을 위해서는 환경변수(.env) 파일이 Project root directory에 필요합니다.
 
 ```
 SUPABASE_URL=<supabase_url>
@@ -9,15 +9,16 @@ UPSTAGE_OCR_URL=https://api.upstage.ai/v1/vision/ocr
 BASE_URL=https://datalab.naver.com/shoppingInsight/sCategory.naver?cid=5000000
 ```
 
-### Airflow 설정
+### Build initial setup
 ```bash
 # Airflow home 디렉토리 설정
-export AIRFLOW_HOME=~/airflow
+export AIRFLOW_HOME=<project directory>/airflow
 poetry run airflow db init
-```
 
-### Airflow 관리자 계정 생성
-``` bash
+# Build initial setup
+poetry run airflow db init
+
+# Build Airflow account
 poetry run airflow users create \
     --username admin \
     --firstname admin \
@@ -45,10 +46,9 @@ poetry run airflow scheduler
 ```
 - 웹 인터페이스 접속: 브라우저에서 0.0.0.0:8080 접속
 - admin/admin으로 로그인
-- DAGs 탭에서 'naver_crawler' DAG 활성화
+- DAGs 탭에서 'product_pipeline' DAG 활성화
 - "Trigger DAG" 버튼으로 수동 실행 테스트 가능
 
 ### 스케줄링
 매주 월요일 자정(0시 0분)에 자동 실행
-스케줄 변경은 naver_crawler.py의 schedule 파라미터에서 수정 가능
-poetry run airflow db init
+스케줄 변경은 product_pipeline_dag.py에서 수정 가능
