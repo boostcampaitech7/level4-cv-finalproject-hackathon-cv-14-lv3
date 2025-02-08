@@ -122,8 +122,8 @@ def main():
     global supabase
 
     # .env 파일 로드 및 Supabase 초기화
-    root_dir = Path(__file__).parents[2]
-    load_dotenv(root_dir / ".env")
+    env_path = Path(__file__).parents[2] / ".env"
+    load_dotenv(env_path)
     supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 
     screenshots_dir = Path(__file__).parent / "src"
