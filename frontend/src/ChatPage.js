@@ -183,7 +183,7 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    padding: '20px',
+    padding: '60px',
   },
   title: {
     textAlign: 'center',
@@ -196,16 +196,16 @@ const styles = {
   },
   container: {
     width: '100%',
-    maxWidth: '800px',
+    maxWidth: '1100px', 
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: '20px',
+    borderRadius: '12px', 
     boxShadow: '0 10px 20px rgba(0, 0, 0, 0.08)',
     display: 'flex',
     flexDirection: 'column',
     height: '80vh',
     overflow: 'hidden',
     border: '1px solid rgba(0,0,0,0.1)',
-  },
+},
   chatHistory: {
     flex: 1,
     overflowY: 'auto',
@@ -225,25 +225,29 @@ const styles = {
     alignItems: 'flex-start', // 상단 정렬을 위해 추가
   },
   userMessage: {
-    backgroundColor: '#4a90e2',
+    backgroundColor: '#1a73e8', // Layout.js와 동일한 브랜드 컬러로 통일
     color: 'white',
-    padding: '12px 18px',
+    padding: '15px 20px',
     borderRadius: '18px 18px 0 18px',
     maxWidth: '70%',
     wordWrap: 'break-word',
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-  },
-  botMessage: {
+    fontSize: '15px', // 글자 크기 조정
+    lineHeight: '1.5' // 줄간격 추가
+},
+botMessage: {
     backgroundColor: 'white',
     color: '#2c3e50',
-    padding: '12px 18px',
+    padding: '15px 20px',
     borderRadius: '18px 18px 18px 0',
-    maxWidth: '70%',
+    maxWidth: '75%',
     wordWrap: 'break-word',
-    marginLeft: '8px',
+    marginLeft: '12px', // 여백 증가
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
     border: '1px solid rgba(0,0,0,0.05)',
-  },
+    fontSize: '15px',
+    lineHeight: '1.5'
+},
   form: {
     display: 'flex',
     padding: '15px 20px',
@@ -254,7 +258,7 @@ const styles = {
     flex: 1,
     padding: '12px 18px',
     border: '1px solid rgba(0,0,0,0.1)',
-    borderRadius: '25px',
+    borderRadius: '15px',
     fontSize: '16px',
     marginRight: '15px',
     transition: 'all 0.3s ease',
@@ -269,7 +273,7 @@ const styles = {
     backgroundColor: '#4a90e2',
     color: 'white',
     border: 'none',
-    borderRadius: '25px',
+    borderRadius: '15px',
     cursor: 'pointer',
     fontSize: '16px',
     fontWeight: '500',
@@ -307,17 +311,18 @@ const styles = {
   },
   modeButtonContainer: {
     display: 'flex',
-    justifyContent: 'flex-end', // 오른쪽 정렬
+    justifyContent: 'flex-start', 
     gap: '10px',
     padding: '10px 20px',
     marginBottom: '15px',
+    marginLeft: '60px'
   },
   modeButton: {
     padding: '10px 20px',
     backgroundColor: '#4a90e2',
     color: 'white',
     border: 'none',
-    borderRadius: '20px',
+    borderRadius: '15px',
     cursor: 'pointer',
     fontSize: '14px',
     transition: 'all 0.3s ease',

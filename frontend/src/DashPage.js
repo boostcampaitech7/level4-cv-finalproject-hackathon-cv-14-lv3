@@ -9,7 +9,8 @@ import { IoMdMedal } from 'react-icons/io';
 ////////////////////////////////////////
 
 const PAGE_STYLE = {
-  backgroundColor: "#f4f4f9",
+  backgroundColor: '#f8f9fa',
+  backgroundImage: 'linear-gradient(to bottom right, #f8f9fa, #e9ecef)',
   padding: "20px",
   fontFamily: "Arial, sans-serif",
   fontSize: "18px"

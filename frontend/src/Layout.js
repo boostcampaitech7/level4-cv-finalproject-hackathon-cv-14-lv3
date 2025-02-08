@@ -65,73 +65,73 @@ const Layout = () => {
     };
 
     const styles = {
-    container: {
-        display: 'flex',
-        height: '100vh',
-        backgroundColor: '#f8f9fa'
-    },
-    sidebar: {
-        width: '256px',
-        backgroundColor: 'white',
-        boxShadow: '2px 0 4px rgba(0,0,0,0.1)'
-    },
-    logo: {
-        padding: '24px',
-        borderBottom: '1px solid #eee'
-    },
-    title: {
-        fontSize: '20px',
-        fontWeight: 'bold',
-        color: '#333'
-    },
-    nav: {
-        marginTop: '24px'
-    },
-    menuItem: {
-        width: 'calc(100% - 48px)', 
-        display: 'flex',
-        alignItems: 'center',
-        padding: '12px 16px',  
-        margin: '4px 24px',    
-        border: 'none',
-        backgroundColor: 'transparent',
-        color: '#666',
-        cursor: 'pointer',
-        transition: 'all 0.2s',
-        textAlign: 'left',
-        borderRadius: '8px',   
-    },
-    activeMenuItem: { 
-        backgroundColor: '#f0f0f0',  
-        color: '#333',              
-        fontWeight: '500'          
-    },
-    icon: {
-        width: '20px',
-        height: '20px',
-        marginRight: '12px'
-    },
-    mainContent: {
-        flex: 1,
-        overflow: 'auto'
-    },
-    contentContainer: {
-        width: '100%',
-        height: '100%',
-        overflow: 'auto',
-        padding: '20px'
-    },
-    contentWrapper: {
-        padding: '32px'
-    },
-    contentBox: {
-        backgroundColor: 'white',
-        borderRadius: '8px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-    },
-    content: {
-        padding: '24px'
-    }
-};
+        container: {
+            display: 'flex',
+            height: '100vh',
+            backgroundColor: '#f8f9fa'
+        },
+        sidebar: {
+            width: '290px', // sidebar너비 증가 
+            backgroundColor: 'white',
+            boxShadow: '2px 0 4px rgba(0,0,0,0.1)',
+            display: 'flex',
+            flexDirection: 'column',
+            borderRight: '1px solid #eee' 
+        },
+        logo: {
+            padding: '28px 24px', 
+            borderBottom: '1px solid #eee',
+            backgroundColor: '#fafafa' 
+        },
+        title: {
+            fontSize: '24px', 
+            fontWeight: 'bold',
+            color: '#333',
+            margin: 0,
+            letterSpacing: '-0.5px'
+        },
+        nav: {
+            marginTop: '28px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px' 
+        },
+        menuItem: {
+            width: 'calc(100% - 48px)',
+            display: 'flex',
+            alignItems: 'center',
+            padding: '14px 18px',
+            margin: '0 24px',
+            border: 'none',
+            backgroundColor: 'transparent',
+            color: '#666',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            textAlign: 'left',
+            borderRadius: '12px',
+            fontSize: '16px',
+            '&:hover': {
+                backgroundColor: '#f5f5f5',
+                color: '#333'
+            }
+        },
+        activeMenuItem: {
+            backgroundColor: '#f0f7ff', // 활성 메뉴 배경색
+            color: '#1a73e8', // 활성 메뉴 텍스트 색상 
+            fontWeight: '600',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.05)' 
+        },
+        icon: {
+            width: '22px', 
+            height: '22px',
+            marginRight: '14px',
+            strokeWidth: 2 
+        },
+        mainContent: {
+            flex: 1,
+            overflow: 'auto',
+            backgroundColor: '#f8f9fa'
+        }
+    };
 
 export default Layout;
