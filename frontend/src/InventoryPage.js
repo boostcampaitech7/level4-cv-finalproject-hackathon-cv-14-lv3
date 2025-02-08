@@ -475,7 +475,7 @@ const InventoryPage = () => {
           .filter(item => item.isLowStock)
           .map(item => ({
             id: item.id,
-            quantity: item.reorder_point // 주문할 수량 계산
+            quantity: item.reorder_point + 5 // 주문할 수량 계산
           }));
 
         if (lowStockItems.length > 0) {
