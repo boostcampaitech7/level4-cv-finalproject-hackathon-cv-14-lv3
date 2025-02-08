@@ -4,7 +4,7 @@ from pathlib import Path
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from dotenv import load_dotenv
-from product_categorizer import CategorySearch  # 같은 디렉토리의 product_categorizer.py에서 import
+from product_categorizer import CategorySearch
 
 root_dir = Path(__file__).parents[2]
 load_dotenv(root_dir / ".env")
@@ -37,6 +37,6 @@ with DAG(
 
             return "Categorization completed successfully"
         except Exception as e:
-            raise Exception(f"Categorization failed: {e!s}")
+            raise Exception(f"Crawling failed: {e!s}") from e
 
     categorize_operator = PythonOperator(task_id="categorize_products", python_callable=categorize_task, dag=dag)

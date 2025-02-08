@@ -1,4 +1,3 @@
-# import 수정
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -35,6 +34,6 @@ with DAG(
             crawler_main()
             return "Crawling completed successfully"
         except Exception as e:
-            raise Exception(f"Crawling failed: {e!s}")
+            raise Exception(f"Crawling failed: {e!s}") from e
 
     crawl_operator = PythonOperator(task_id="crawl_naver_shopping", python_callable=crawl_task, dag=dag)

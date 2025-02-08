@@ -45,7 +45,7 @@ with DAG(
             context["task_instance"].xcom_push(key="crawled_products", value=enriched_products)
             return "Crawling completed successfully"
         except Exception as e:
-            raise Exception(f"Crawling failed: {e!s}")
+            raise Exception(f"Crawling failed: {e!s}") from e
 
     def categorize_task(**context):
         """상품 카테고리 분류 태스크"""
@@ -80,17 +80,7 @@ with DAG(
                     print(f"\n{'='*50}")
                     print(f"Processing product: {product['product_name']}")
 
-                    result = categorizer.find_category(product["product_name"])
-
-                    # 상세 결과 출력
-                    print("Category Result:")
-                    print(f"- Main: {result.main}")
-                    print(f"- Sub1: {result.sub1}")
-                    print(f"- Sub2: {result.sub2}")
-                    print(f"- Sub3: {result.sub3}")
-                    print(f"- Confidence: {result.confidence}")
-                    print(f"- Success: {result.success}")
-
+                    result = categorizer.find_category({"product_name": product["product_name"], "category": product["category"]})
                     # sub3까지 모든 카테고리가 있는 경우에만 저장
                     if result.main and result.sub1 and result.sub2 and result.sub3 and result.success and result.confidence > 0.6:
                         order_product = {
@@ -142,7 +132,7 @@ with DAG(
             return "Categorization completed successfully"
 
         except Exception as e:
-            raise Exception(f"Categorization failed: {e!s}")
+            raise Exception(f"Crawling failed: {e!s}") from e
 
     crawl_operator = PythonOperator(task_id="crawl_naver_shopping", python_callable=crawl_task, provide_context=True, dag=dag)
 

@@ -44,9 +44,8 @@ class CategoryResult:
 
 class CategorySearch:
     def __init__(self):
-        root_dir = Path(__file__).parents[2]
-        load_dotenv(root_dir / ".env")
-        load_dotenv()
+        env_path = Path(__file__).parents[2] / ".env"
+        load_dotenv(env_path)
         self.client = OpenAI(
             api_key=os.getenv("UPSTAGE_API_KEY"), base_url=os.getenv("UPSTAGE_API_BASE_URL", "https://api.upstage.ai/v1/solar")
         )
@@ -68,35 +67,51 @@ class CategorySearch:
         }
 
     def load_data(self):
-        """Supabase에서 데이터 로드 및 초기화"""
-        logger.info("Loading category data from Supabase...")
+        """Supabase에서 계층적 카테고리 데이터 로드 및 초기화"""
+        logger.info("Loading hierarchical category data from Supabase...")
 
         try:
-            # 카테고리 데이터 로드
-            category_response = self.supabase.table("order_product").select("*").execute()
+            # product_info 테이블에서 카테고리 데이터 로드
+            category_response = self.supabase.table("product_info").select("main, sub1, sub2, sub3").execute()
             category_df = pd.DataFrame(category_response.data)
 
-            # 카테고리 데이터 처리
-            for level in ["main", "sub1", "sub2", "sub3"]:
-                values = category_df[level].dropna().unique()
-                self.categories[level] = set(values)
-                logger.info(f"Loaded {len(values)} unique {level} categories")
+            # 데이터 상태 확인
+            logger.info(f"Loaded category data shape: {category_df.shape}")
 
-            # 계층 구조 구축
-            self._build_category_hierarchy(category_df)
+            # 계층적 구조로 카테고리 저장
+            self.category_hierarchy = {}
 
-            # 트렌드 제품 데이터 로드
-            logger.info("Loading trend product data from Supabase...")
-            trend_response = self.supabase.table("trend_product").select("*").execute()
-            self.trend_products = [{"category": item["category"], "product_name": item["product_name"]} for item in trend_response.data]
-            logger.info(f"Loaded {len(self.trend_products)} trend products")
+            # 메인 카테고리 처리
+            unique_mains = category_df["main"].dropna().unique()
+            self.categories["main"] = set(unique_mains)
 
-            # 트렌드 데이터 기반으로 패턴 분석 및 예제 구축
-            self._analyze_patterns_from_trends()
-            self._build_example_cases_from_trends()
+            for main_cat in unique_mains:
+                self.category_hierarchy[main_cat] = {"sub1": {}}
+
+                # main에 속하는 sub1 카테고리들 찾기
+                sub1_mask = category_df["main"] == main_cat
+                sub1_categories = category_df[sub1_mask]["sub1"].dropna().unique()
+
+                for sub1_cat in sub1_categories:
+                    self.category_hierarchy[main_cat]["sub1"][sub1_cat] = {"sub2": {}}
+
+                    # sub1에 속하는 sub2 카테고리들 찾기
+                    sub2_mask = (category_df["main"] == main_cat) & (category_df["sub1"] == sub1_cat)
+                    sub2_categories = category_df[sub2_mask]["sub2"].dropna().unique()
+
+                    for sub2_cat in sub2_categories:
+                        self.category_hierarchy[main_cat]["sub1"][sub1_cat]["sub2"][sub2_cat] = {"sub3": set()}
+
+                        # sub2에 속하는 sub3 카테고리들 찾기
+                        sub3_mask = (
+                            (category_df["main"] == main_cat) & (category_df["sub1"] == sub1_cat) & (category_df["sub2"] == sub2_cat)
+                        )
+                        sub3_categories = category_df[sub3_mask]["sub3"].dropna().unique()
+
+                        self.category_hierarchy[main_cat]["sub1"][sub1_cat]["sub2"][sub2_cat]["sub3"].update(sub3_categories)
 
         except Exception as e:
-            logger.error(f"Error loading data from Supabase: {e!s}")
+            logger.error(f"Error loading hierarchical category data: {e!s}")
             raise
 
     def _build_category_hierarchy(self, df: pd.DataFrame):
@@ -223,6 +238,33 @@ Category: [정확한 카테고리명 또는 None]
 Confidence: [0.5-1.0]
 Reasoning: [분류 근거 설명]"""
 
+    def _parse_response(self, response: str, level: str, valid_categories: set[str] | None = None) -> dict:
+        """LLM 응답을 파싱하여 결과 딕셔너리 반환"""
+        try:
+            # 정규식을 사용하여 응답에서 필요한 정보 추출
+            category_match = self._regex_patterns["category"].search(response)
+            confidence_match = self._regex_patterns["confidence"].search(response)
+            reasoning_match = self._regex_patterns["reasoning"].search(response)
+
+            category = category_match.group(1) if category_match else None
+            confidence = float(confidence_match.group(1)) if confidence_match else 0.0
+            reasoning = reasoning_match.group(1) if reasoning_match else ""
+
+            # 카테고리가 유효한지 확인
+            if valid_categories and category not in valid_categories:
+                category = None
+                confidence = 0.0
+
+            return {
+                "category": category,
+                "confidence": confidence,
+                "reasoning": reasoning,
+                "success": category is not None and confidence > 0.5,
+            }
+        except Exception as e:
+            logger.error(f"Error parsing response: {e!s}")
+            return {"category": None, "confidence": 0.0, "reasoning": "", "success": False}
+
     def _find_matching_category(self, input_text: str, level: str, valid_categories: set[str] | None = None) -> dict:
         """Few-shot 학습을 적용한 카테고리 매칭"""
         prompt = self._create_few_shot_prompt(input_text, level, valid_categories)
@@ -268,68 +310,72 @@ Reasoning: [분류 근거 설명]"""
             "success": max_similarity > 0.3,
         }
 
-    def find_category(self, input_text: str) -> CategoryResult:
-        """앙상블 방식의 카테고리 검색"""
-        # LLM 기반 분류
-        llm_result = self._find_matching_category(input_text, "main")
+    def find_category(self, product_info: dict) -> CategoryResult:
+        """계층적 구조를 고려한 카테고리 검색
 
-        # 계층 구조 기반 분류
-        hierarchy_result = self._find_category_by_hierarchy(input_text)
+        Args:
+            product_info (dict): 제품 정보 딕셔너리 {'product_name': str, 'category': str}
 
-        # 앙상블 결과 결정
-        if llm_result["success"] and hierarchy_result["success"]:
-            if llm_result["main"] == hierarchy_result["main"]:
-                confidence = max(llm_result["confidence"], hierarchy_result["confidence"])
-                main = llm_result["main"]
-            else:
-                if llm_result["confidence"] > hierarchy_result["confidence"]:
-                    confidence = llm_result["confidence"]
-                    main = llm_result["main"]
-                else:
-                    confidence = hierarchy_result["confidence"]
-                    main = hierarchy_result["main"]
-        elif llm_result["success"]:
-            confidence = llm_result["confidence"]
-            main = llm_result["main"]
-        elif hierarchy_result["success"]:
-            confidence = hierarchy_result["confidence"]
-            main = hierarchy_result["main"]
-        else:
-            return CategoryResult(text=input_text, main="Unknown", confidence=0.0, success=False)
+        Returns:
+            CategoryResult: 카테고리 분류 결과
+        """
+        input_text = f"{product_info['product_name']} ({product_info['category']})"
+        logger.info(f"Finding category for: {input_text}")
 
-        # 높은 신뢰도의 결과에 대해 모든 서브카테고리 검색
-        sub1_result = None
-        sub2_result = None
-        sub3_result = None
+        # 먼저 main 카테고리 찾기
+        main_result = self._find_matching_category(input_text, "main")
+        logger.info(f"Main category result: {main_result}")
 
-        if confidence > 0.8:
-            # sub1 카테고리 검색
-            valid_sub1_categories = self.category_hierarchy[main]["sub1"]
-            sub1_result = self._find_matching_category(input_text, "sub1", valid_sub1_categories)
+        if not main_result["success"]:
+            return CategoryResult(text=input_text, main=None, confidence=0.0, success=False)
 
-            # sub1이 성공적으로 찾아졌을 경우 sub2 검색
-            if sub1_result and sub1_result["success"]:
-                valid_sub2_categories = self.category_hierarchy[main]["sub2"]
-                sub2_result = self._find_matching_category(input_text, "sub2", valid_sub2_categories)
+        main_category = main_result["main"]
 
-                # sub2가 성공적으로 찾아졌을 경우 sub3 검색
-                if sub2_result and sub2_result["success"]:
-                    valid_sub3_categories = self.category_hierarchy[main]["sub3"]
-                    sub3_result = self._find_matching_category(input_text, "sub3", valid_sub3_categories)
+        # main 카테고리가 있으면, 해당 main에 속하는 sub1 중에서 찾기
+        valid_sub1s = set(self.category_hierarchy[main_category]["sub1"].keys())
+        sub1_result = self._find_matching_category(input_text, "sub1", valid_categories=valid_sub1s)
+        logger.info(f"Sub1 category result: {sub1_result}")
+
+        if not sub1_result["success"]:
+            return CategoryResult(text=input_text, main=main_category, confidence=main_result["confidence"], success=True)
+
+        sub1_category = sub1_result["main"]
+
+        # sub1이 있으면, 해당 sub1에 속하는 sub2 중에서 찾기
+        valid_sub2s = set(self.category_hierarchy[main_category]["sub1"][sub1_category]["sub2"].keys())
+        sub2_result = self._find_matching_category(input_text, "sub2", valid_categories=valid_sub2s)
+        logger.info(f"Sub2 category result: {sub2_result}")
+
+        if not sub2_result["success"]:
+            return CategoryResult(
+                text=input_text,
+                main=main_category,
+                sub1=sub1_category,
+                confidence=min(main_result["confidence"], sub1_result["confidence"]),
+                success=True,
+            )
+
+        sub2_category = sub2_result["main"]
+
+        # sub2가 있으면, 해당 sub2에 속하는 sub3 중에서 찾기
+        valid_sub3s = self.category_hierarchy[main_category]["sub1"][sub1_category]["sub2"][sub2_category]["sub3"]
+        sub3_result = self._find_matching_category(input_text, "sub3", valid_categories=valid_sub3s)
+        logger.info(f"Sub3 category result: {sub3_result}")
+
+        final_confidence = min(
+            main_result["confidence"],
+            sub1_result["confidence"],
+            sub2_result["confidence"],
+            sub3_result["confidence"] if sub3_result["success"] else 1.0,
+        )
 
         return CategoryResult(
             text=input_text,
-            main=main,
-            sub1=sub1_result["main"] if sub1_result and sub1_result["success"] else None,
-            sub2=sub2_result["main"] if sub2_result and sub2_result["success"] else None,
-            sub3=sub3_result["main"] if sub3_result and sub3_result["success"] else None,
-            confidence=confidence,
+            main=main_category,
+            sub1=sub1_category,
+            sub2=sub2_category,
+            sub3=sub3_result["main"] if sub3_result["success"] else None,
+            confidence=final_confidence,
             success=True,
-            ensemble_info={
-                "llm_result": llm_result,
-                "hierarchy_result": hierarchy_result,
-                "sub1_result": sub1_result,
-                "sub2_result": sub2_result,
-                "sub3_result": sub3_result,
-            },
+            ensemble_info={"main_result": main_result, "sub1_result": sub1_result, "sub2_result": sub2_result, "sub3_result": sub3_result},
         )

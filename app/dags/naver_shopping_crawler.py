@@ -75,7 +75,7 @@ def trigger_n8n_webhook():
     """n8n webhook 트리거"""
     webhook_url = "http://localhost:5678/webhook/trending"
     try:
-        response = requests.post(webhook_url)
+        response = requests.post(webhook_url, timeout=30)
         if response.status_code == 200:
             print("N8n workflow triggered successfully")
         else:
@@ -106,7 +106,7 @@ def ocr_image(image_path):
     try:
         with open(image_path, "rb") as image_file:
             files = {"document": image_file}
-            response = requests.post(url, headers=headers, files=files)
+            response = requests.post(url, headers=headers, files=files, timeout=30)
 
         if response.status_code != 200:
             print(f"OCR error: {response.text}")
