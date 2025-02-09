@@ -117,6 +117,12 @@ with DAG(
                     else:
                         fail_count += 1
                         print(f"❌ Failed to categorize: {product['product_name']}")
+                        if not result.sub3:
+                            print("Failure reason: Incomplete category path (missing sub3)")
+                        elif not result.success:
+                            print("Failure reason: Classification not successful")
+                        else:
+                            print(f"Failure reason: Low confidence ({result.confidence})")
 
                 except Exception as e:
                     fail_count += 1
