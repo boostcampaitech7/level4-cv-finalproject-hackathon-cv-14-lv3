@@ -271,7 +271,7 @@ Reasoning: [분류 근거 설명]"""
 
         try:
             response = self.client.chat.completions.create(
-                model="solar-pro", max_tokens=200, temperature=0, messages=[{"role": "user", "content": prompt}]
+                model="solar-pro", max_tokens=200, temperature=0.7, messages=[{"role": "user", "content": prompt}]
             )
 
             result = response.choices[0].message.content
