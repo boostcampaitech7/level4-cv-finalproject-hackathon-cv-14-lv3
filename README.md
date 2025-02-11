@@ -46,7 +46,7 @@ python main.py
 
 # API Server
 cd app
-python api.py  
+python api.py
 
 # Frontend
 cd frontend
