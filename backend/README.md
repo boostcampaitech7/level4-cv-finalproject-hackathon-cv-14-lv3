@@ -1,10 +1,16 @@
-## 시작하는 방법
+## 🚀 Setup & Installation
 
+프로젝트를 실행하기 위한 기본 설정입니다:
+
+1. Repository Clone
+```bash
+git clone https://github.com/boostcampaitech7/level4-cv-finalproject-hackathon-cv-14-lv3.git
+cd level4-cv-finalproject-hackathon-cv-14-lv3
 ```
+
+2. How to Run
+```bash
+# Backend
 cd backend
-
-backend 폴더 아래에 .env 파일 생성 후에
-UPSTAGE_API_KEY="YOUR_OPENAI_API_KEY" 입력 
-
 python main.py
 ```
