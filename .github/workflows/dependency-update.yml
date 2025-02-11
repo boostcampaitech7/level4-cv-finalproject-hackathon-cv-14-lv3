@@ -1,0 +1,55 @@
+name: Update Dependencies
+
+on:
+  pull_request:
+    if: ${{ github.actor == 'dependabot[bot]' }}
+  workflow_dispatch:  # Trigger
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Poetry and tools
+        run: |
+          pip install poetry
+          pip install poetry-unused pip-audit
+
+      - name: Check unused dependencies
+        run: poetry-unused
+
+      - name: Update dependencies
+        run: poetry update
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Run tests
+        run: poetry run pytest
+
+      - name: Security check dependencies
+        run: poetry run pip-audit
+
+      - name: Remove unused dependencies
+        if: success()
+        run: |
+          poetry-unused | grep "::unused::" | cut -d" " -f2 | xargs -I {} poetry remove {}
+
+      - name: Update lockfile after removal
+        run: poetry lock --no-update
+
+      - name: Commit changes if needed
+        run: |
+          if [[ $(git status --porcelain) ]]; then
+            git config --local user.email "github-actions[bot]@users.noreply.github.com"
+            git config --local user.name "github-actions[bot]"
+            git add poetry.lock pyproject.toml
+            git commit -m "👷 chore: update dependencies"
+            git push
+          fi
