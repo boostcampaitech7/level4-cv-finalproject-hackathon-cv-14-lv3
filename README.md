@@ -32,6 +32,9 @@
 
 프로젝트를 실행하기 위한 기본 설정입니다:
 
+- [Data](https://drive.google.com/file/d/16Dtf-Covz6-_RDhfMEyqVhFL-7yY5aeL/view?usp=drive_link)
+- [Weight](https://drive.google.com/file/d/1k9muoQNIuIaRxXhtsa9-kvhXbv9L-elO/view?usp=drive_link)
+
 1. Repository Clone
 ```bash
 git clone https://github.com/boostcampaitech7/level4-cv-finalproject-hackathon-cv-14-lv3.git
