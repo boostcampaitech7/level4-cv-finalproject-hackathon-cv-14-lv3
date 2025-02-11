@@ -8,7 +8,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Body
+from fastapi import Body, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 from pydantic import BaseModel
@@ -18,38 +18,33 @@ from supabase.lib.client_options import ClientOptions
 from torch.utils.data import DataLoader, Dataset
 from tqdm.auto import tqdm
 
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 print(device)
 
-CFG = {
-    'TRAIN_WINDOW_SIZE':60,
-    'PREDICT_SIZE':1,
-    'EPOCHS':50,
-    'LEARNING_RATE':1e-4,
-    'BATCH_SIZE':1024,
-    'SEED': 42
-}
+CFG = {"TRAIN_WINDOW_SIZE": 60, "PREDICT_SIZE": 1, "EPOCHS": 50, "LEARNING_RATE": 1e-4, "BATCH_SIZE": 1024, "SEED": 42}
+
 
 def seed_everything(seed):
     random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = True
 
-seed_everything(CFG['SEED'])
 
-train_cat = pd.read_csv('../database/train.csv').drop(columns=['ID'])
-train_num = pd.read_csv('../database/train.csv').drop(columns=['ID'])
+seed_everything(CFG["SEED"])
 
-train_cat = train_cat.iloc[:,:4]
+train_cat = pd.read_csv("../database/train.csv").drop(columns=["ID"])
+train_num = pd.read_csv("../database/train.csv").drop(columns=["ID"])
+
+train_cat = train_cat.iloc[:, :4]
 train_num = train_num.iloc[:, 4:-41]
 
 train_data = pd.concat([train_cat, train_num], axis=1)
 
-out_train = pd.read_csv('../database/train.csv')
+out_train = pd.read_csv("../database/train.csv")
 out_train = out_train.iloc[:, -7:]
 
 train_data = pd.concat([train_data, out_train], axis=1)
@@ -58,15 +53,15 @@ train_data = pd.concat([train_data, out_train], axis=1)
 numeric_cols = train_data.columns[4:]
 
 # 각 column의 min 및 max 계산
-min_values = train_data[numeric_cols].min(axis = 1)
-max_values = train_data[numeric_cols].max(axis = 1)
+min_values = train_data[numeric_cols].min(axis=1)
+max_values = train_data[numeric_cols].max(axis=1)
 
 # 각 행의 범위(max-min)를 계산하고, 범위가 0인 경우 1로 대체
 ranges = max_values - min_values
 ranges[ranges == 0] = 1
 
 # min-max scaling 수행
-train_data[numeric_cols] = (train_data[numeric_cols].subtract(min_values, axis = 0)).div(ranges, axis = 0)
+train_data[numeric_cols] = (train_data[numeric_cols].subtract(min_values, axis=0)).div(ranges, axis=0)
 
 # max와 min 값을 dictionary 형태로 저장
 scale_min_dict = min_values.to_dict()
@@ -74,12 +69,13 @@ scale_max_dict = max_values.to_dict()
 
 # 1. 범주형 변수 레이블 인코딩
 label_encoders = {}  # 각 컬럼별로 LabelEncoder를 저장
-categorical_columns = ['Main', 'Sub1', 'Sub2', 'Sub3']
+categorical_columns = ["Main", "Sub1", "Sub2", "Sub3"]
 
 for col in categorical_columns:
     le = LabelEncoder()
     train_data[col] = le.fit_transform(train_data[col]).astype(int)
     label_encoders[col] = le
+
 
 # 2. 임베딩 레이어 생성
 class CategoricalEmbedding(nn.Module):
@@ -87,14 +83,15 @@ class CategoricalEmbedding(nn.Module):
         super(CategoricalEmbedding, self).__init__()
 
         # 각 범주형 변수에 대한 임베딩 레이어를 생성
-        self.embeddings = nn.ModuleList([
-            nn.Embedding(input_size, dim) for input_size, dim in zip(input_sizes, embedding_dims, strict=False)
-        ])
+        self.embeddings = nn.ModuleList(
+            [nn.Embedding(input_size, dim) for input_size, dim in zip(input_sizes, embedding_dims, strict=False)]
+        )
 
     def forward(self, x):
         # x: [batch_size, num_categorical_features]
         embedded = [embedding(x[:, i]) for i, embedding in enumerate(self.embeddings)]
         return torch.cat(embedded, dim=1)  # 연결된 임베딩 벡터 반환
+
 
 # 각 범주형 변수의 최대값 (레이블 인코딩된 값) + 1을 구함
 input_sizes = [train_data[col].max() + 1 for col in categorical_columns]
@@ -105,7 +102,7 @@ embedding_dims = [int(np.sqrt(size) // 2) for size in input_sizes]
 model = CategoricalEmbedding(input_sizes, embedding_dims)
 
 # 모든 행에 대한 범주형 데이터를 PyTorch 텐서로 변환
-all_data_tensor = torch.tensor(train_data[categorical_columns].values, dtype = torch.long)
+all_data_tensor = torch.tensor(train_data[categorical_columns].values, dtype=torch.long)
 
 # 임베딩 모델에 텐서를 입력하여 임베딩된 값을 얻음
 with torch.no_grad():
@@ -126,15 +123,16 @@ for i, col in enumerate(categorical_columns):
     start_idx += embedding_dims[i]
 
 # 레이블 인코딩된 컬럼 제거
-train_data.drop(columns=categorical_columns, inplace = True)
+train_data.drop(columns=categorical_columns, inplace=True)
 
 # 임베딩된 데이터를 원본 데이터프레임의 앞 부분에 추가
-train_data = pd.concat([embedded_df, train_data], axis = 1)
+train_data = pd.concat([embedded_df, train_data], axis=1)
 
 # 결과 확인
 train_data.head()
 
-def make_predict_data(data, train_size = CFG['TRAIN_WINDOW_SIZE']):
+
+def make_predict_data(data, train_size=CFG["TRAIN_WINDOW_SIZE"]):
     num_rows = len(data)
 
     input_data = np.empty((num_rows, train_size, len(data.iloc[0, :33]) + 1))
@@ -143,13 +141,15 @@ def make_predict_data(data, train_size = CFG['TRAIN_WINDOW_SIZE']):
         encode_info = np.array(data.iloc[i, :33])
         sales_data = np.array(data.iloc[i, -train_size:])
 
-        window = sales_data[-train_size : ]
+        window = sales_data[-train_size:]
         temp_data = np.column_stack((np.tile(encode_info, (train_size, 1)), window[:train_size]))
         input_data[i] = temp_data
 
     return input_data
 
+
 test_input = make_predict_data(train_data)
+
 
 # Custom Dataset
 class CustomDataset(Dataset):
@@ -165,8 +165,10 @@ class CustomDataset(Dataset):
     def __len__(self):
         return len(self.X)
 
+
 test_dataset = CustomDataset(test_input, None)
-test_loader = DataLoader(test_dataset, batch_size = CFG['BATCH_SIZE'], shuffle = False, num_workers = 0)
+test_loader = DataLoader(test_dataset, batch_size=CFG["BATCH_SIZE"], shuffle=False, num_workers=0)
+
 
 def inference(model, test_loader, device):
     predictions = []
@@ -184,6 +186,7 @@ def inference(model, test_loader, device):
 
     return np.array(predictions)
 
+
 class Mish(nn.Module):
     def __init__(self):
         super().__init__()
@@ -191,21 +194,18 @@ class Mish(nn.Module):
     def forward(self, x):
         return x * torch.tanh(nn.functional.softplus(x))
 
+
 class StackedLSTMModel(nn.Module):
-    def __init__(self, input_size = 34, hidden_size = 1024, output_size = CFG['PREDICT_SIZE'], num_layers = 3, dropout = 0.5):
+    def __init__(self, input_size=34, hidden_size=1024, output_size=CFG["PREDICT_SIZE"], num_layers=3, dropout=0.5):
         super(StackedLSTMModel, self).__init__()
 
         self.hidden_size = hidden_size
         self.num_layers = num_layers
 
         # LSTM 레이어 내부에 dropout 적용
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers=num_layers, dropout = (0 if num_layers == 1 else dropout), batch_first = True)
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers=num_layers, dropout=(0 if num_layers == 1 else dropout), batch_first=True)
 
-        self.fc = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size//2),
-            Mish(),
-            nn.Linear(hidden_size//2, output_size)
-        )
+        self.fc = nn.Sequential(nn.Linear(hidden_size, hidden_size // 2), Mish(), nn.Linear(hidden_size // 2, output_size))
 
         self.actv = Mish()
 
@@ -227,13 +227,16 @@ class StackedLSTMModel(nn.Module):
 
     def init_hidden(self, batch_size, device):
         # Initialize hidden state and cell state
-        return (torch.zeros(self.num_layers, batch_size, self.hidden_size, device = device),
-                torch.zeros(self.num_layers, batch_size, self.hidden_size, device = device))
+        return (
+            torch.zeros(self.num_layers, batch_size, self.hidden_size, device=device),
+            torch.zeros(self.num_layers, batch_size, self.hidden_size, device=device),
+        )
+
 
 # 1) FastAPI 앱 생성
 app = FastAPI()
 
-# WebSocket 연결 관리 
+# WebSocket 연결 관리
 active_connections = []
 
 # CORS 설정
@@ -246,21 +249,20 @@ app.add_middleware(
 )
 
 # 환경 변수 로드
-load_dotenv()
-UPSTAGE_API_KEY = os.getenv('UPSTAGE_API_KEY')
-UPSTAGE_API_BASE_URL = os.getenv('UPSTAGE_API_BASE_URL')
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+ROOT_DIR = Path(__file__).parents[1]
+load_dotenv(ROOT_DIR / ".env")
+UPSTAGE_API_KEY = os.getenv("UPSTAGE_API_KEY")
+UPSTAGE_API_BASE_URL = os.getenv("UPSTAGE_API_BASE_URL")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 # Supabase 클라이언트 초기화
 options = ClientOptions(postgrest_client_timeout=600)  # 타임아웃을 600초로 설정
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY, options)
 
 # OpenAI 클라이언트 초기화
-client = OpenAI(
-    api_key=UPSTAGE_API_KEY,
-    base_url=UPSTAGE_API_BASE_URL
-)
+client = OpenAI(api_key=UPSTAGE_API_KEY, base_url=UPSTAGE_API_BASE_URL)
+
 
 # ===== 데이터 로딩 =====
 # Supabase 연결 재설정 함수
@@ -269,6 +271,7 @@ def reconnect_supabase():
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
     print("Reconnected to Supabase.")
 
+
 # Supabase에서 모든 레코드를 페이지네이션(Chunk) 방식으로 가져오는 공통 함수
 def load_all_data(table_name):
     all_data = []
@@ -276,13 +279,7 @@ def load_all_data(table_name):
     start = 0
 
     while True:
-        response = (
-            supabase
-            .table(table_name)
-            .select("*")
-            .range(start, start + chunk_size - 1)
-            .execute()
-        )
+        response = supabase.table(table_name).select("*").range(start, start + chunk_size - 1).execute()
         fetched_data = response.data
 
         # 각 사이클에서 가져온 데이터 개수 출력
@@ -296,6 +293,7 @@ def load_all_data(table_name):
         start += chunk_size
 
     return all_data
+
 
 # daily_sales_data 테이블의 모든 데이터를 읽어와 DataFrame으로 변환
 def load_sales_data():
@@ -322,6 +320,7 @@ def load_sales_data():
         print(f"Database path: {db_path}")
         raise
 
+
 # daily_data 테이블의 모든 데이터를 읽어와 DataFrame으로 변환
 def load_quantity_data():
     try:
@@ -345,25 +344,25 @@ def load_quantity_data():
         print(f"Database path: {db_path}")
         raise
 
+
 # product_inventory 테이블의 모든 데이터를 읽어와 DataFrame으로 변환
 def load_inventory_data():
     all_data = load_all_data("product_inventory")
     df = pd.DataFrame(all_data)
     return df
 
+
 # trend_product 테이블의 데이터를 읽어오는 함수
 def load_trend_data():
     try:
-        response = supabase.table('trend_product') \
-            .select('product_name, rank, category, id') \
-            .eq('rank', 1) \
-            .execute()
+        response = supabase.table("trend_product").select("product_name, rank, category, id").eq("rank", 1).execute()
 
         df = pd.DataFrame(response.data)
         return df
     except Exception as e:
         print(f"Error loading trend data: {e!s}")
         raise
+
 
 # 데이터 로드
 df_sales = load_sales_data()
@@ -375,25 +374,25 @@ reconnect_supabase()
 trend_df = load_trend_data()  # 트렌드 데이터 로드 추가
 
 # ===== 컬럼명 변경 =====
-df_sales = df_sales.rename(columns={'value': '매출액'})
-df_quantity = df_quantity.rename(columns={'value': '판매수량'})
-inventory_df = inventory_df.rename(columns={'value': '재고수량'})
+df_sales = df_sales.rename(columns={"value": "매출액"})
+df_quantity = df_quantity.rename(columns={"value": "판매수량"})
+inventory_df = inventory_df.rename(columns={"value": "재고수량"})
 
 # 문자열 변환
-df_sales['date'] = df_sales['date'].astype(str)
-df_quantity['date'] = df_quantity['date'].astype(str)
+df_sales["date"] = df_sales["date"].astype(str)
+df_quantity["date"] = df_quantity["date"].astype(str)
 
 # 만약 df_sales에 '대분류' 혹은 '소분류' 컬럼이 없다면 product_info 데이터를 불러와 병합
-if '소분류' not in df_sales.columns or '대분류' not in df_sales.columns:
+if "소분류" not in df_sales.columns or "대분류" not in df_sales.columns:
     # product_info 테이블에는 id, main, sub1, sub2, sub3가 있음 (여기서는 sub1: 대분류, sub3: 소분류로 사용)
-    product_info_response = supabase.from_('product_info').select("id, sub1, sub3").execute()
+    product_info_response = supabase.from_("product_info").select("id, sub1, sub3").execute()
     df_product_info = pd.DataFrame(product_info_response.data)
     # 필요한 컬럼명을 변경합니다.
     df_product_info = df_product_info.rename(columns={"sub1": "대분류", "sub3": "소분류"})
 
     # id 컬럼을 문자열로 변환
-    df_sales['id'] = df_sales['id'].astype(str)
-    df_product_info['id'] = df_product_info['id'].astype(str)
+    df_sales["id"] = df_sales["id"].astype(str)
+    df_product_info["id"] = df_product_info["id"].astype(str)
 
     # df_sales에 product_info를 id를 기준으로 병합 (left join)
     df_sales = df_sales.merge(df_product_info[["id", "대분류", "소분류"]], on="id", how="left")
@@ -403,62 +402,62 @@ if '소분류' not in df_sales.columns or '대분류' not in df_sales.columns:
 data = df_sales.copy()
 data_quantity = df_quantity.copy()
 
-data['날짜'] = pd.to_datetime(data['date'])
-data_quantity['날짜'] = pd.to_datetime(data_quantity['date'])
+data["날짜"] = pd.to_datetime(data["date"])
+data_quantity["날짜"] = pd.to_datetime(data_quantity["date"])
 
 # 일간 합계
-daily_df = data.groupby('날짜', as_index=False)['매출액'].sum()
-daily_df = daily_df.rename(columns={'매출액': '값'})
+daily_df = data.groupby("날짜", as_index=False)["매출액"].sum()
+daily_df = daily_df.rename(columns={"매출액": "값"})
 
 # 주간 집계 (날짜를 주 시작일로 변환하여 그룹화)
-daily_df['주간'] = daily_df['날짜'].dt.to_period('W').apply(lambda r: r.start_time)
-weekly_data = daily_df.groupby('주간', as_index=False)['값'].sum()
+daily_df["주간"] = daily_df["날짜"].dt.to_period("W").apply(lambda r: r.start_time)
+weekly_data = daily_df.groupby("주간", as_index=False)["값"].sum()
 
 # 월간 집계 (날짜를 월 시작일로 변환하여 그룹화)
-daily_df['월간'] = daily_df['날짜'].dt.to_period('M').apply(lambda r: r.start_time)
-monthly_sum_df = daily_df.groupby('월간', as_index=False)['값'].sum()
+daily_df["월간"] = daily_df["날짜"].dt.to_period("M").apply(lambda r: r.start_time)
+monthly_sum_df = daily_df.groupby("월간", as_index=False)["값"].sum()
 
 # 최근 12개월 합계를 "연간 매출"로 가정
 recent_12_months = monthly_sum_df.tail(12)
-annual_sales = recent_12_months['값'].sum()
+annual_sales = recent_12_months["값"].sum()
 
 # KPI 계산
-daily_avg = daily_df['값'].mean() if not daily_df.empty else 0
-weekly_avg = weekly_data['값'].mean() if not weekly_data.empty else 0
-monthly_avg = monthly_sum_df['값'].mean() if not monthly_sum_df.empty else 0
-last_daily = daily_df['값'].iloc[-1] if not daily_df.empty else 0
-last_weekly = weekly_data['값'].iloc[-1] if not weekly_data.empty else 0
-last_monthly = monthly_sum_df['값'].iloc[-1] if not monthly_sum_df.empty else 0
+daily_avg = daily_df["값"].mean() if not daily_df.empty else 0
+weekly_avg = weekly_data["값"].mean() if not weekly_data.empty else 0
+monthly_avg = monthly_sum_df["값"].mean() if not monthly_sum_df.empty else 0
+last_daily = daily_df["값"].iloc[-1] if not daily_df.empty else 0
+last_weekly = weekly_data["값"].iloc[-1] if not weekly_data.empty else 0
+last_monthly = monthly_sum_df["값"].iloc[-1] if not monthly_sum_df.empty else 0
 
 # 월간 변화율 계산
 if len(monthly_sum_df) >= 2:
-    lm_sales = monthly_sum_df['값'].iloc[-1]
-    slm_sales = monthly_sum_df['값'].iloc[-2]
+    lm_sales = monthly_sum_df["값"].iloc[-1]
+    slm_sales = monthly_sum_df["값"].iloc[-2]
     monthly_change = ((lm_sales - slm_sales) / slm_sales) * 100 if slm_sales != 0 else 0
 else:
     monthly_change = 0
 
 # 카테고리별(대분류) 매출
-df_category = df_sales.groupby('대분류', as_index=False)['매출액'].sum()
+df_category = df_sales.groupby("대분류", as_index=False)["매출액"].sum()
 
 # 재고수량 및 일일판매수량 처리
-data_quantity['날짜'] = pd.to_datetime(data_quantity['date'])
-last_date = data_quantity['날짜'].max()
+data_quantity["날짜"] = pd.to_datetime(data_quantity["date"])
+last_date = data_quantity["날짜"].max()
 if last_date:
-    daily_sales_quantity_last = data_quantity[data_quantity['날짜'] == last_date][['id', '판매수량']]
-    daily_sales_quantity_last = daily_sales_quantity_last.rename(columns={'판매수량': '일판매수량'})
+    daily_sales_quantity_last = data_quantity[data_quantity["날짜"] == last_date][["id", "판매수량"]]
+    daily_sales_quantity_last = daily_sales_quantity_last.rename(columns={"판매수량": "일판매수량"})
 else:
-    daily_sales_quantity_last = pd.DataFrame(columns=['id', '일판매수량'])
+    daily_sales_quantity_last = pd.DataFrame(columns=["id", "일판매수량"])
 
-merged_df = pd.merge(inventory_df, daily_sales_quantity_last, on='id', how='left')
-merged_df['일판매수량'] = merged_df['일판매수량'].fillna(0)
-merged_df['남은 재고'] = merged_df['재고수량'] - merged_df['일판매수량']
-low_stock_df = merged_df[(merged_df['남은 재고'] >= 0) & (merged_df['남은 재고'] <= 30)]
+merged_df = pd.merge(inventory_df, daily_sales_quantity_last, on="id", how="left")
+merged_df["일판매수량"] = merged_df["일판매수량"].fillna(0)
+merged_df["남은 재고"] = merged_df["재고수량"] - merged_df["일판매수량"]
+low_stock_df = merged_df[(merged_df["남은 재고"] >= 0) & (merged_df["남은 재고"] <= 30)]
 
 # 매출 상승폭(소분류)
 # 만약 소분류 값이 없는 경우 "기타" 처리
-data["소분류"] = data["소분류"].fillna('기타')
-pivot_subcat = data.groupby(['소분류', '날짜'])['매출액'].sum().unstack().fillna(0)
+data["소분류"] = data["소분류"].fillna("기타")
+pivot_subcat = data.groupby(["소분류", "날짜"])["매출액"].sum().unstack().fillna(0)
 all_dates = sorted(pivot_subcat.columns)
 if len(all_dates) >= 2:
     last_date_val, second_last_date_val = all_dates[-1], all_dates[-2]
@@ -471,29 +470,26 @@ else:
 subcat_list = pivot_subcat.sum(axis=1).sort_values(ascending=False).head(10).index.tolist()
 
 # ---------- (추가) 상/하위 10개 계산 ----------
-monthly_data = (
-    data.assign(월=lambda df: df['날짜'].dt.to_period('M').astype(str))
-    .groupby(['id', '월'], as_index=False)['매출액'].sum()
-)
-result = monthly_data.pivot(index='id', columns='월', values='매출액').reset_index()
-result['id'] = result['id'].astype(str)
+monthly_data = data.assign(월=lambda df: df["날짜"].dt.to_period("M").astype(str)).groupby(["id", "월"], as_index=False)["매출액"].sum()
+result = monthly_data.pivot(index="id", columns="월", values="매출액").reset_index()
+result["id"] = result["id"].astype(str)
 if len(result.columns) > 1:
     last_month_col = result.columns[-1]
 else:
     last_month_col = None
 
-reds = ['#D14B4B', '#E22B2B', '#E53A3A', '#F15D5D', '#F67878',
-        '#F99A9A', '#FBB6B6', '#FDC8C8', '#FEE0E0', '#FEEAEA']
-blues = ['#B0D6F1', '#A5C9E9', '#99BCE1', '#8DB0D9', '#81A4D1',
-         '#7498C9', '#688BC1', '#5C7FB9', '#5073B1', '#4567A9']
+reds = ["#D14B4B", "#E22B2B", "#E53A3A", "#F15D5D", "#F67878", "#F99A9A", "#FBB6B6", "#FDC8C8", "#FEE0E0", "#FEEAEA"]
+blues = ["#B0D6F1", "#A5C9E9", "#99BCE1", "#8DB0D9", "#81A4D1", "#7498C9", "#688BC1", "#5C7FB9", "#5073B1", "#4567A9"]
 
 # ===== 엔드포인트들 =====
+
 
 @app.get("/")
 def read_root():
     return {
         "status": "success",
     }
+
 
 @app.get("/api/kpis")
 def get_kpis():
@@ -509,11 +505,13 @@ def get_kpis():
         "monthly_change": float(monthly_change),
     }
 
+
 @app.get("/api/daily")
 def get_daily_data():
     # 2023년 이후 데이터만 필터링
     filtered_daily = daily_df
     return filtered_daily.to_dict(orient="records")
+
 
 @app.get("/api/weekly")
 def get_weekly_data():
@@ -521,15 +519,18 @@ def get_weekly_data():
     filtered_weekly = weekly_data
     return filtered_weekly.to_dict(orient="records")
 
+
 @app.get("/api/monthly")
 def get_monthly_data():
     return monthly_sum_df.to_dict(orient="records")
 
+
 @app.get("/api/categorypie")
 def get_category_pie():
     # 매출액 기준으로 정렬하고 상위 5개만 선택
-    top_5_categories = df_category.nlargest(5, '매출액')
+    top_5_categories = df_category.nlargest(5, "매출액")
     return top_5_categories.to_dict(orient="records")
+
 
 @app.get("/api/lowstock")
 def get_low_stock():
@@ -538,24 +539,26 @@ def get_low_stock():
 
     try:
         # product_info 테이블에서 sub3 정보 가져오기
-        response = supabase.table('product_info').select("id", "sub3").execute()
+        response = supabase.table("product_info").select("id", "sub3").execute()
         product_info = pd.DataFrame(response.data)
-        product_info = product_info.rename(columns={'id': 'id', 'sub3': 'Sub3'})
+        product_info = product_info.rename(columns={"id": "id", "sub3": "Sub3"})
 
         # low_stock_df와 product_info 병합
-        merged_low_stock = pd.merge(low_stock_df, product_info, on='id', how='left')
+        merged_low_stock = pd.merge(low_stock_df, product_info, on="id", how="left")
 
         return merged_low_stock.to_dict(orient="records")
     except Exception as e:
         print(f"Error in get_low_stock: {e!s}")
         return {"error": str(e)}
 
+
 @app.get("/api/rising-subcategories")
 def get_rising_subcategories():
     return {
         "rise_rate": float(rise_rate),
-        "subcat_list": list(subcat_list)  # 넘파이 Index -> list
+        "subcat_list": list(subcat_list),  # 넘파이 Index -> list
     }
+
 
 # (수정) 판매수량 상위 10개 품목 반환 엔드포인트
 @app.get("/api/topbottom")
@@ -563,122 +566,107 @@ def get_topbottom():
     try:
         # df_quantity는 이미 전역 변수로 로드되어 있음 (컬럼: id, date, 판매수량)
         # 전체 판매수량을 제품별로 집계
-        sales_qty_total = df_quantity.groupby('id', as_index=False)['판매수량'].sum()
+        sales_qty_total = df_quantity.groupby("id", as_index=False)["판매수량"].sum()
 
         # 판매수량 상위 10개 품목 선택
-        top_10_df = sales_qty_total.nlargest(10, '판매수량').copy()
-        top_10_df['id'] = top_10_df['id'].astype(str)
-        top_10_df = top_10_df.rename(columns={'id': 'ID', '판매수량': '총판매수량'})
+        top_10_df = sales_qty_total.nlargest(10, "판매수량").copy()
+        top_10_df["id"] = top_10_df["id"].astype(str)
+        top_10_df = top_10_df.rename(columns={"id": "ID", "판매수량": "총판매수량"})
 
         # Supabase에서 product_info 데이터 (예: 제품명 또는 sub3 정보를 가져옴)
-        response = supabase.table('product_info').select("id, sub3").execute()
+        response = supabase.table("product_info").select("id, sub3").execute()
         product_info = pd.DataFrame(response.data)
-        product_info['id'] = product_info['id'].astype(str)
-        product_info = product_info.rename(columns={'id': 'ID', 'sub3': 'Sub3'})
+        product_info["id"] = product_info["id"].astype(str)
+        product_info = product_info.rename(columns={"id": "ID", "sub3": "Sub3"})
 
         # 집계 데이터와 product_info를 병합 (제품명 등 추가 정보 포함)
-        top_10_df = pd.merge(top_10_df, product_info, on='ID', how='left')
+        top_10_df = pd.merge(top_10_df, product_info, on="ID", how="left")
 
-        top_10_list = top_10_df.to_dict('records')
-        return {
-            "top_10": top_10_list
-        }
+        top_10_list = top_10_df.to_dict("records")
+        return {"top_10": top_10_list}
     except Exception as e:
         print(f"Error in get_topbottom: {e!s}")
-        return {
-            "top_10": [],
-            "error": str(e)
-        }
+        return {"top_10": [], "error": str(e)}
+
 
 # 챗봇용 데이터 미리 준비
 def prepare_chat_data():
     # 월별 매출 데이터
-    monthly_sales_text = "월별 매출 데이터:\n" + "\n".join([
-        f"{row['월간'].strftime('%Y-%m')}: {row['값']:,}원"
-        for row in monthly_sum_df.to_dict('records')
-    ])
-
-    # 주간 매출 데이터
-    weekly_sales_text = "주간 매출 데이터:\n" + "\n".join([
-        f"{row['주간'].strftime('%Y-%m-%d')}: {row['값']:,}원"
-        for row in weekly_data.tail(12).to_dict('records')
-    ])
-
-    # 일별 매출 데이터
-    daily_sales_text = "최근 30일 일별 매출 데이터:\n" + "\n".join([
-        f"{row['날짜'].strftime('%Y-%m-%d')}: {row['값']:,}원"
-        for row in daily_df.tail(30).to_dict('records')
-    ])
-
-    # 카테고리별 매출 상세
-    category_details = df_sales.groupby('대분류').agg({
-        '매출액': ['sum', 'mean', 'count']
-    }).reset_index()
-    category_details.columns = ['대분류', '총매출', '평균매출', '판매건수']
-
-    category_text = "카테고리별 매출 상세:\n" + "\n".join([
-        f"{row['대분류']}: 총매출 {row['총매출']:,}원, 평균 {row['평균매출']:,.0f}원, {row['판매건수']}건"
-        for _, row in category_details.iterrows()
-    ])
-
-    # 재고 현황 상세
-    inventory_status = pd.merge(
-        inventory_df,
-        daily_sales_quantity_last,
-        on='id',
-        how='left'
+    monthly_sales_text = "월별 매출 데이터:\n" + "\n".join(
+        [f"{row['월간'].strftime('%Y-%m')}: {row['값']:,}원" for row in monthly_sum_df.to_dict("records")]
     )
 
+    # 주간 매출 데이터
+    weekly_sales_text = "주간 매출 데이터:\n" + "\n".join(
+        [f"{row['주간'].strftime('%Y-%m-%d')}: {row['값']:,}원" for row in weekly_data.tail(12).to_dict("records")]
+    )
+
+    # 일별 매출 데이터
+    daily_sales_text = "최근 30일 일별 매출 데이터:\n" + "\n".join(
+        [f"{row['날짜'].strftime('%Y-%m-%d')}: {row['값']:,}원" for row in daily_df.tail(30).to_dict("records")]
+    )
+
+    # 카테고리별 매출 상세
+    category_details = df_sales.groupby("대분류").agg({"매출액": ["sum", "mean", "count"]}).reset_index()
+    category_details.columns = ["대분류", "총매출", "평균매출", "판매건수"]
+
+    category_text = "카테고리별 매출 상세:\n" + "\n".join(
+        [
+            f"{row['대분류']}: 총매출 {row['총매출']:,}원, 평균 {row['평균매출']:,.0f}원, {row['판매건수']}건"
+            for _, row in category_details.iterrows()
+        ]
+    )
+
+    # 재고 현황 상세
+    inventory_status = pd.merge(inventory_df, daily_sales_quantity_last, on="id", how="left")
+
     # product_info 테이블에서 카테고리 정보 가져오기
-    product_info_response = supabase.from_('product_info').select("id,main,sub3").execute()
+    product_info_response = supabase.from_("product_info").select("id,main,sub3").execute()
     product_info_df = pd.DataFrame(product_info_response.data)
 
     # 데이터 병합
-    inventory_status = pd.merge(
-        inventory_status,
-        product_info_df,
-        left_on='id',
-        right_on='id',
-        how='left'
+    inventory_status = pd.merge(inventory_status, product_info_df, left_on="id", right_on="id", how="left")
+
+    inventory_status["일판매수량"] = inventory_status["일판매수량"].fillna(0)
+    inventory_status["남은재고"] = inventory_status["재고수량"] - inventory_status["일판매수량"]
+
+    inventory_text = "카테고리별 재고 현황:\n" + "\n".join(
+        [
+            f"{row['main'] if pd.notna(row['main']) else '미분류'}({row['sub3'] if pd.notna(row['sub3']) else '미분류'}): "
+            f"총재고 {row['재고수량']}개, 일판매량 {row['일판매수량']}개, 남은재고 {row['남은재고']}개"
+            for _, row in inventory_status.iterrows()
+        ]
     )
-
-    inventory_status['일판매수량'] = inventory_status['일판매수량'].fillna(0)
-    inventory_status['남은재고'] = inventory_status['재고수량'] - inventory_status['일판매수량']
-
-    inventory_text = "카테고리별 재고 현황:\n" + "\n".join([
-        f"{row['main'] if pd.notna(row['main']) else '미분류'}({row['sub3'] if pd.notna(row['sub3']) else '미분류'}): "
-        f"총재고 {row['재고수량']}개, 일판매량 {row['일판매수량']}개, 남은재고 {row['남은재고']}개"
-        for _, row in inventory_status.iterrows()
-    ])
 
     return {
         "monthly_sales": monthly_sales_text,
         "weekly_sales": weekly_sales_text,
         "daily_sales": daily_sales_text,
         "category_details": category_text,
-        "inventory_status": inventory_text
+        "inventory_status": inventory_text,
     }
+
 
 # 데이터 미리 준비
 CHAT_DATA = prepare_chat_data()
+
 
 @app.post("/api/chat")
 async def chat_with_solar(message: dict):
     try:
         # product_info 테이블에서 sub3 정보 가져오기
-        response = supabase.table('product_info').select("id, sub3").execute()
+        response = supabase.table("product_info").select("id, sub3").execute()
         product_info = pd.DataFrame(response.data)
-        product_info = product_info.rename(columns={'id': 'id', 'sub3': 'Sub3'})
+        product_info = product_info.rename(columns={"id": "id", "sub3": "Sub3"})
 
         # low_stock_df와 product_info 병합
-        merged_low_stock = pd.merge(low_stock_df, product_info, on='id', how='left')
+        merged_low_stock = pd.merge(low_stock_df, product_info, on="id", how="left")
         total_low_stock = len(merged_low_stock)
 
         if total_low_stock > 0:
-            low_stock_list = "\n".join([
-                f"- {row['Sub3'] if pd.notna(row['Sub3']) else '미분류'}: {row['남은 재고']}개"
-                for _, row in merged_low_stock.iterrows()
-            ])
+            low_stock_list = "\n".join(
+                [f"- {row['Sub3'] if pd.notna(row['Sub3']) else '미분류'}: {row['남은 재고']}개" for _, row in merged_low_stock.iterrows()]
+            )
         else:
             low_stock_list = "현재 재고 부족 상품이 없습니다."
 
@@ -724,101 +712,75 @@ async def chat_with_solar(message: dict):
 
         response = client.chat.completions.create(
             model="solar-pro",
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": message["content"]}
-            ],
+            messages=[{"role": "system", "content": system_message}, {"role": "user", "content": message["content"]}],
             temperature=0.0,
             stream=False,
-            response_format={"type": "text/html"}  # HTML 형식 응답 요청
+            response_format={"type": "text/html"},  # HTML 형식 응답 요청
         )
 
-        if hasattr(response, 'error'):
-            return {
-                "response": f"API 오류: {response.error}",
-                "status": "error",
-                "error": str(response.error)
-            }
+        if hasattr(response, "error"):
+            return {"response": f"API 오류: {response.error}", "status": "error", "error": str(response.error)}
 
-        return {
-            "response": response.choices[0].message.content,
-            "status": "success"
-        }
+        return {"response": response.choices[0].message.content, "status": "success"}
 
     except Exception as e:
         print(f"Error details: {e!s}")
-        return {
-            "response": f"서버 오류가 발생했습니다: {e!s}",
-            "status": "error",
-            "error": str(e)
-        }
+        return {"response": f"서버 오류가 발생했습니다: {e!s}", "status": "error", "error": str(e)}
+
 
 @app.get("/api/trend-categories")
 async def get_trend_categories():
     try:
         # 단순히 trending_product 테이블에서 모든 카테고리 조회
-        response = supabase.table('trend_product')\
-            .select('category')\
-            .execute()
-        
+        response = supabase.table("trend_product").select("category").execute()
+
         # 중복 제거 및 정렬
-        categories = sorted(list(set([item['category'] for item in response.data])))
-        
-        return {
-            "status": "success",
-            "categories": categories
-        }
+        categories = sorted(list(set([item["category"] for item in response.data])))
+
+        return {"status": "success", "categories": categories}
 
     except Exception as e:
         print(f"Error in trend-chat: {e!s}")
-        return {
-            "status": "error",
-            "error": f"서버 오류가 발생했습니다: {e!s}"
-        }
+        return {"status": "error", "error": f"서버 오류가 발생했습니다: {e!s}"}
+
 
 @app.post("/api/trend-chat")
 async def chat_with_trend(message: dict):
-   try:
-       # trend_product 테이블에서 모든 데이터 조회
-       response = supabase.table('trend_product')\
-           .select('*')\
-           .order('rank')\
-           .execute()
+    try:
+        # trend_product 테이블에서 모든 데이터 조회
+        response = supabase.table("trend_product").select("*").order("rank").execute()
 
-       trend_data = response.data
+        trend_data = response.data
 
-       # 트렌드 데이터를 카테고리별로 정리
-       categorized_trends = {}
-       for item in trend_data:
-           category = item['category'].strip()  
-           if category not in categorized_trends:
-               categorized_trends[category] = []
-           categorized_trends[category].append({
-               'rank': item['rank'],
-               'product_name': item['product_name'],
-               'start_date': item['start_date'],
-               'end_date': item['end_date']
-           })
+        # 트렌드 데이터를 카테고리별로 정리
+        categorized_trends = {}
+        for item in trend_data:
+            category = item["category"].strip()
+            if category not in categorized_trends:
+                categorized_trends[category] = []
+            categorized_trends[category].append(
+                {"rank": item["rank"], "product_name": item["product_name"], "start_date": item["start_date"], "end_date": item["end_date"]}
+            )
 
-       # 사용자 메시지에서 카테고리 확인
-       user_category = message["content"].strip()
-       
-       if user_category in categorized_trends:
-           # 해당 카테고리의 상위 5개 순위 정보 구성
-           trend_info = []
-           category_data = sorted(categorized_trends[user_category], key=lambda x: x['rank'])[:5]
-           
-           # 기간 정보 추출
-           period = f"{category_data[0]['start_date']} ~ {category_data[0]['end_date']}"
-           
-           # 순위 정보 구성
-           for item in category_data:
-               trend_info.append(f"{item['rank']}위: {item['product_name']}")
-           
-           trend_text = "\n".join(trend_info)
-           
-           # 시스템 메시지 구성
-           system_message = f"""
+        # 사용자 메시지에서 카테고리 확인
+        user_category = message["content"].strip()
+
+        if user_category in categorized_trends:
+            # 해당 카테고리의 상위 5개 순위 정보 구성
+            trend_info = []
+            category_data = sorted(categorized_trends[user_category], key=lambda x: x["rank"])[:5]
+
+            # 기간 정보 추출
+            period = f"{category_data[0]['start_date']} ~ {category_data[0]['end_date']}"
+
+            # 순위 정보 구성
+            for item in category_data:
+                trend_info.append(f"{item['rank']}위: {item['product_name']}")
+
+            trend_text = "\n".join(trend_info)
+
+            # 시스템 메시지 구성
+            system_message = f"""
             You are an AI retail trend analyst specializing in sales improvement.
 
             Let me show you how to analyze retail trends with multiple examples:
@@ -836,7 +798,7 @@ async def chat_with_trend(message: dict):
             Thought Process:
             1. Two out of top 5 are IoT/wearable devices (earphones, smartwatch)
             2. Winter season items (air purifier, humidifier) show seasonal demand
-            3. Audio devices (earphones, speaker) indicate strong entertainment needs 
+            3. Audio devices (earphones, speaker) indicate strong entertainment needs
             4. Mix of health (air care) and lifestyle tech shows balanced consumption
 
             Analysis Result:
@@ -898,44 +860,35 @@ async def chat_with_trend(message: dict):
             5. Present your analysis in Korean using the same format as the examples
             """
 
-           # Solar ChatAPI 응답 생성
-           response = client.chat.completions.create(
-               model="solar-pro",
-               messages=[
-                   {"role": "system", "content": system_message},
-                   {"role": "user", "content": f"Please analyze the trends for {category} category and provide the response in Korean."}
-               ],
-               temperature=0.3, 
-               stream=False,
-               response_format={"type": "text/html"}
-           )
+            # Solar ChatAPI 응답 생성
+            response = client.chat.completions.create(
+                model="solar-pro",
+                messages=[
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": f"Please analyze the trends for {category} category and provide the response in Korean."},
+                ],
+                temperature=0.3,
+                stream=False,
+                response_format={"type": "text/html"},
+            )
 
-           if hasattr(response, 'error'):
-               return {
-                   "response": f"API 오류: {response.error}",
-                   "status": "error",
-                   "error": str(response.error)
-               }
+            if hasattr(response, "error"):
+                return {"response": f"API 오류: {response.error}", "status": "error", "error": str(response.error)}
 
-           return {
-               "response": response.choices[0].message.content,
-               "status": "success"
-           }
-       else:
-           # 카테고리가 없는 경우 사용 가능한 카테고리 목록 반환
-           available_categories = list(categorized_trends.keys())
-           return {
-               "response": f"죄송합니다. '{user_category}' 카테고리는 현재 트렌드 정보에 없습니다.\n\n조회 가능한 카테고리: {', '.join(available_categories)}",
-               "status": "success"
-           }
+            return {"response": response.choices[0].message.content, "status": "success"}
+        else:
+            # 카테고리가 없는 경우 사용 가능한 카테고리 목록 반환
+            available_categories = list(categorized_trends.keys())
+            return {
+                "response": f"죄송합니다. '{user_category}' 카테고리는 현재 트렌드 정보에 없습니다.\n\n조회 가능한 카테고리: {', '.join(available_categories)}",
+                "status": "success",
+            }
 
-   except Exception as e:
-       print(f"Error in trend-chat: {e!s}")
-       return {
-           "status": "error",
-           "error": f"서버 오류가 발생했습니다: {e!s}"
-       }
-   
+    except Exception as e:
+        print(f"Error in trend-chat: {e!s}")
+        return {"status": "error", "error": f"서버 오류가 발생했습니다: {e!s}"}
+
+
 @app.get("/api/top-sales-items")
 def get_top_sales_items():
     try:
@@ -943,79 +896,89 @@ def get_top_sales_items():
         global df_sales
 
         # date 컬럼을 datetime으로 변환
-        df_sales['date'] = pd.to_datetime(df_sales['date'])
+        df_sales["date"] = pd.to_datetime(df_sales["date"])
 
         # 최근 3개월 데이터 필터링
-        latest_date = df_sales['date'].max()
+        latest_date = df_sales["date"].max()
         three_months_ago = latest_date - pd.DateOffset(months=3)
-        recent_data = df_sales[df_sales['date'] >= three_months_ago]
+        recent_data = df_sales[df_sales["date"] >= three_months_ago]
 
         # ID별 총 매출액 계산 및 상위 5개 선택
-        total_sales_by_id = recent_data.groupby(['id', '소분류'])['매출액'].sum().reset_index()
-        top_5 = total_sales_by_id.nlargest(5, '매출액')
+        total_sales_by_id = recent_data.groupby(["id", "소분류"])["매출액"].sum().reset_index()
+        top_5 = total_sales_by_id.nlargest(5, "매출액")
 
         # 최근 2일 날짜 구하기
-        prev_date = df_sales[df_sales['date'] < latest_date]['date'].max()
+        prev_date = df_sales[df_sales["date"] < latest_date]["date"].max()
 
         result = []
         for _, row in top_5.iterrows():
-            item_id = row['id']
-            item_data = df_sales[df_sales['id'] == item_id]
+            item_id = row["id"]
+            item_data = df_sales[df_sales["id"] == item_id]
 
             # 최근 2일 매출액
-            latest_sales = item_data[item_data['date'] == latest_date]['매출액'].sum()
-            prev_sales = item_data[item_data['date'] == prev_date]['매출액'].sum()
+            latest_sales = item_data[item_data["date"] == latest_date]["매출액"].sum()
+            prev_sales = item_data[item_data["date"] == prev_date]["매출액"].sum()
 
             # 증감률 계산
             change_rate = ((latest_sales - prev_sales) / prev_sales * 100) if prev_sales != 0 else 0
 
-            result.append({
-                "id": item_id,
-                "name": row['소분류'] if pd.notna(row['소분류']) else f"Product {item_id}",
-                "sales": float(latest_sales),
-                "change_rate": float(change_rate)
-            })
+            result.append(
+                {
+                    "id": item_id,
+                    "name": row["소분류"] if pd.notna(row["소분류"]) else f"Product {item_id}",
+                    "sales": float(latest_sales),
+                    "change_rate": float(change_rate),
+                }
+            )
 
         return result if result else []
     except Exception as e:
-        print(f"Error in get_top_sales_items: {str(e)}")
+        print(f"Error in get_top_sales_items: {e!s}")
         return []
+
 
 @app.get("/api/daily-top-sales")
 def get_daily_top_sales():
     try:
         # 이미 병합된 df_sales 사용 (대분류, 소분류 정보 포함)
-        latest_date = df_sales['date'].max()
-        latest_sales = df_sales[df_sales['date'] == latest_date].copy()
-        
+        latest_date = df_sales["date"].max()
+        latest_sales = df_sales[df_sales["date"] == latest_date].copy()
+
         # 제품별 매출액 합계 계산 및 상위 7개 선택
-        daily_top_7 = latest_sales.groupby(['id', '대분류', '소분류'], as_index=False)['매출액'].sum()
-        daily_top_7 = daily_top_7.nlargest(7, '매출액')
-        
+        daily_top_7 = latest_sales.groupby(["id", "대분류", "소분류"], as_index=False)["매출액"].sum()
+        daily_top_7 = daily_top_7.nlargest(7, "매출액")
+
         # 결과 포맷팅
-        result = [{
-            'id': str(row['id']),
-            'category': row['대분류'],  # 대분류
-            'subcategory': row['소분류'],  # 소분류
-            'sales': float(row['매출액']),
-            'date': latest_date
-        } for _, row in daily_top_7.iterrows()]
-        
+        result = [
+            {
+                "id": str(row["id"]),
+                "category": row["대분류"],  # 대분류
+                "subcategory": row["소분류"],  # 소분류
+                "sales": float(row["매출액"]),
+                "date": latest_date,
+            }
+            for _, row in daily_top_7.iterrows()
+        ]
+
         return result
     except Exception as e:
-        print(f"Error in get_daily_top_sales: {str(e)}")
+        print(f"Error in get_daily_top_sales: {e!s}")
         return []
 
 
 @app.get("/api/inventory")
 def get_inventory(sort: str = None, main: str = None, sub1: str = None, sub2: str = None):
     try:
-        response = supabase.from_('product_inventory').select("""
+        response = (
+            supabase.from_("product_inventory")
+            .select("""
             id, value,
             product_info (
                 main, sub1, sub2, sub3
             )
-        """).execute()
+        """)
+            .execute()
+        )
 
         df_inventory = pd.DataFrame(response.data)
 
@@ -1030,7 +993,7 @@ def get_inventory(sort: str = None, main: str = None, sub1: str = None, sub2: st
 
         # ✅ 불필요한 컬럼 제거 (`product_info`는 원본 JSON이므로 삭제)
         df_inventory = df_inventory.drop(columns=["product_info"])
-        
+
         # ✅ 필터링 적용
         if main:
             df_inventory = df_inventory[df_inventory["main"] == main]
@@ -1044,11 +1007,11 @@ def get_inventory(sort: str = None, main: str = None, sub1: str = None, sub2: st
             df_inventory = df_inventory.sort_values(by=["value"], ascending=(sort == "asc"))
 
         return df_inventory.to_dict(orient="records")
-    
-    
+
     except Exception as e:
         print(f"❌ Error fetching inventory: {e!s}")
         return {"error": str(e)}
+
 
 # ✅ 카테고리 필터 엔드포인트
 @app.get("/api/category_filters")
@@ -1057,13 +1020,15 @@ def get_category_filters(main: str = None, sub1: str = None, sub2: str = None):
     선택된 main, sub1, sub2를 기반으로 가능한 sub1, sub2, sub3 목록 반환
     """
     try:
-        response = supabase.from_('product_info').select("main, sub1, sub2, sub3").execute()
+        response = supabase.from_("product_info").select("main, sub1, sub2, sub3").execute()
         df = pd.DataFrame(response.data)
 
         filters = {}
 
         if main and sub1 and sub2:
-            filters["sub3"] = sorted(df[(df["main"] == main) & (df["sub1"] == sub1) & (df["sub2"] == sub2)]["sub3"].dropna().unique().tolist())
+            filters["sub3"] = sorted(
+                df[(df["main"] == main) & (df["sub1"] == sub1) & (df["sub2"] == sub2)]["sub3"].dropna().unique().tolist()
+            )
         elif main and sub1:
             filters["sub2"] = sorted(df[(df["main"] == main) & (df["sub1"] == sub1)]["sub2"].dropna().unique().tolist())
         elif main:
@@ -1080,7 +1045,7 @@ def get_category_filters(main: str = None, sub1: str = None, sub2: str = None):
 # ✅ 최소 재고 기준(ROP) 계산 (서버 실행 시 한 번만 수행)
 def compute_fixed_reorder_points():
     try:
-        response = supabase.from_('monthly_sales').select("*").execute()
+        response = supabase.from_("monthly_sales").select("*").execute()
         df_sales = pd.DataFrame(response.data)
 
         # 모델 인스턴스 생성
@@ -1135,13 +1100,15 @@ def compute_fixed_reorder_points():
         print(f"❌ 최소 재고 기준 계산 오류: {e!s}")
         return {}
 
+
 # ✅ 서버 실행 시 최초 계산하여 저장
 FIXED_REORDER_POINTS = compute_fixed_reorder_points()
+
 
 @app.get("/api/reorder_points")
 def get_reorder_points(start: str, end: str):
     try:
-        response = supabase.from_('monthly_sales').select("*").execute()
+        response = supabase.from_("monthly_sales").select("*").execute()
         df_sales = pd.DataFrame(response.data)
 
         if df_sales.empty:
@@ -1173,17 +1140,17 @@ def get_reorder_points(start: str, end: str):
         print(f"❌ ROP 갱신 오류: {e!s}")
         return {"error": str(e)}
 
+
 active_connections = []
 db_path = os.path.join(os.path.dirname(__file__), "../database/database.db")
+
 
 def order_db():
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
     # 테이블 존재 여부 확인
-    cursor.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='auto_orders';"
-    )
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='auto_orders';")
     table_exists = cursor.fetchone()
 
     # 테이블이 없으면 생성
@@ -1200,7 +1167,9 @@ def order_db():
 
     conn.close()
 
+
 order_db()
+
 
 # ✅ 주문 데이터 모델
 class OrderItem(BaseModel):
@@ -1208,8 +1177,10 @@ class OrderItem(BaseModel):
     value: int
     is_orderable: bool
 
+
 class OrderData(BaseModel):
     items: list[OrderItem]
+
 
 # ✅ WebSocket 핸들러 (프론트엔드와 실시간 연결)
 @app.websocket("/ws/auto_orders")
@@ -1221,6 +1192,7 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.receive_text()  # 클라이언트 메시지 수신 (필요 없으면 제거 가능)
     except WebSocketDisconnect:
         active_connections.remove(websocket)
+
 
 # ✅ 주문 데이터 저장 + WebSocket으로 프론트에 전송
 @app.post("/api/auto_orders")
@@ -1249,59 +1221,65 @@ async def save_auto_order(order_data: OrderData):
 
     return {"status": "success", "message": "자동 주문 완료 리스트 저장됨"}
 
+
 @app.get("/api/trend-products")
 async def get_trend_products():
     try:
-        return trend_df.to_dict(orient='records')
+        return trend_df.to_dict(orient="records")
     except Exception as e:
-        print(f"Error in get_trend_products: {str(e)}")
+        print(f"Error in get_trend_products: {e!s}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/update-order-products")
 async def update_order_products(low_stock_items: list = Body(...)):
     try:
         # 현재 order_product 테이블의 상품 ID 목록 가져오기
-        existing_orders = supabase.table('order_product').select('id').execute()
-        existing_ids = set(item['id'] for item in existing_orders.data)
-        
+        existing_orders = supabase.table("order_product").select("id").execute()
+        existing_ids = set(item["id"] for item in existing_orders.data)
+
         # 제품 정보 가져오기 (카테고리 정보용)
-        product_info_response = supabase.from_('product_info').select("*").execute()
+        product_info_response = supabase.from_("product_info").select("*").execute()
         product_info_df = pd.DataFrame(product_info_response.data)
-        
+
         # 주문 상품 데이터 준비 (이미 등록된 상품 제외)
         order_items = []
         for item in low_stock_items:
-            if str(item['id']) not in existing_ids:  # 이미 등록된 상품이 아닌 경우만 추가
+            if str(item["id"]) not in existing_ids:  # 이미 등록된 상품이 아닌 경우만 추가
                 try:
-                    product_info = product_info_df[product_info_df['id'] == int(item['id'])].iloc[0]
-                    
-                    order_items.append({
-                        'id': str(item['id']),
-                        'main': product_info['main'],
-                        'sub1': product_info['sub1'],
-                        'sub2': product_info['sub2'],
-                        'sub3': product_info['sub3'],
-                        'quantity': item['quantity']
-                    })
+                    product_info = product_info_df[product_info_df["id"] == int(item["id"])].iloc[0]
+
+                    order_items.append(
+                        {
+                            "id": str(item["id"]),
+                            "main": product_info["main"],
+                            "sub1": product_info["sub1"],
+                            "sub2": product_info["sub2"],
+                            "sub3": product_info["sub3"],
+                            "quantity": item["quantity"],
+                        }
+                    )
                 except Exception as e:
-                    print(f"상품 ID {item['id']}의 정보 처리 중 오류 발생: {str(e)}")
+                    print(f"상품 ID {item['id']}의 정보 처리 중 오류 발생: {e!s}")
                     continue
-        
+
         if order_items:
             # 새로운 주문 데이터만 삽입
-            result = supabase.table('order_product').insert(order_items).execute()
+            result = supabase.table("order_product").insert(order_items).execute()
             return {"status": "success", "message": f"{len(order_items)}개 상품이 주문 목록에 추가되었습니다."}
-        
+
         return {"status": "success", "message": "추가할 새로운 상품이 없습니다."}
 
     except Exception as e:
         # 중복 키 에러는 무시하고 성공으로 처리
-        if 'duplicate key value' in str(e):
+        if "duplicate key value" in str(e):
             return {"status": "success", "message": "이미 등록된 상품입니다."}
-        print(f"❌ 주문 상품 업데이트 오류: {str(e)}")
+        print(f"❌ 주문 상품 업데이트 오류: {e!s}")
         return {"status": "error", "message": str(e)}
+
 
 # main
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False) 
+
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)

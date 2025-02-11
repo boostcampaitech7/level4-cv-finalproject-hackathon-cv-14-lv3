@@ -64,7 +64,8 @@ def upload_batch_to_supabase(supabase, batch_data: list[dict[str, Any]]) -> int:
 def upload_category_data(db_path: str, batch_size: int = 100):
     """카테고리 데이터를 Supabase에 업로드"""
     # 환경 설정
-    load_dotenv()
+    ROOT_DIR = Path(__file__).parents[2]
+    load_dotenv(ROOT_DIR / ".env")
     supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 
     # DB 연결 및 초기화
