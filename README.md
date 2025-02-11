@@ -1,4 +1,4 @@
-# :e AI 스마트 재고 관리 솔루션📦 "StockSense"
+# :AI 스마트 재고 관리 솔루션📦 "StockSense"
 
 ## 📖 Overview
 
@@ -31,7 +31,25 @@
 ## 📦 Folder Structure
 
 ```
-이거 진짜 겁나 많은데 어쩌지
+├── app
+│  ├── api.py
+│  ├── dags
+│  │  └── product_pipeline_dag.py # Airflow DAG pipeline
+│  └── webshop_agent
+│     ├── env_history.py # env in Web-shop
+│     ├── generate_reflections.py # Reflection for faild trial
+│     ├── run.py
+│     └── webshop_trial.py # Web-shop Agent
+├── backend
+│  └── main.py  # FastAPI endpoints and routes
+├── database
+│  ├── format_converter  # DB migration : CSV->SQLite->PostgreSQL
+│  └──  preprocessing  # DB preprocessing for column name,
+└── frontend
+   └── src
+      ├── ChatPage.js # Chatbot UI
+      ├── DashPage.js # Dashboard UI
+      └── InventoryPage.js # Inventory UI
 ```
 
 
@@ -39,7 +57,7 @@
 
 ### Whole Process
 ![image](https://github.com/user-attachments/assets/b72a77d6-1195-4c5d-a7d3-4a597587a67f)
-
+![Image](https://github.com/user-attachments/assets/f2c13f73-e9d1-41c0-87e9-f75062537456)
 
 ### Trend Product Search
 ![image](https://github.com/user-attachments/assets/4d595ddb-1c8e-4c20-aa49-abc10ccb021c)
@@ -52,4 +70,3 @@
 ![대시보드_ppt](https://github.com/user-attachments/assets/4d97c0cd-e1aa-4ca1-968c-a0b392e14ab6)
 ![인벤토리](https://github.com/user-attachments/assets/953f676c-77a4-4d5a-80f2-503e12616636)
 ![챗봇_ppt](https://github.com/user-attachments/assets/cdbb3b4e-df05-47fc-bad4-d90fd76f3e6b)
-
