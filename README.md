@@ -1,4 +1,4 @@
-# :AI 스마트 재고 관리 솔루션📦 "StockSense"
+# AI 스마트 재고 관리 솔루션📦 "StockSense"
 
 ## 📖 Overview
 
@@ -27,6 +27,35 @@
 - 🛠️ Development : n8n, FastAPI, React, Upstage API
 - 👥 Communication : GitHub, Notion, Slack, Jira
 - 🧱 Deployment : Docker
+
+## 🚀 Setup & Installation
+
+프로젝트를 실행하기 위한 기본 설정입니다:
+
+1. Repository Clone
+```bash
+git clone https://github.com/boostcampaitech7/level4-cv-finalproject-hackathon-cv-14-lv3.git
+cd level4-cv-finalproject-hackathon-cv-14-lv3
+```
+
+2. How to Run
+```bash
+# Backend
+cd backend
+python main.py
+
+# API Server
+cd app
+python api.py  
+
+# Frontend
+cd frontend
+npm install
+npm start
+```
+
+더 자세한 설정 방법은 [Setup Guide](./docs/setup-guide.md)를 참고해주세요.
+
 
 ## 📦 Folder Structure
 
