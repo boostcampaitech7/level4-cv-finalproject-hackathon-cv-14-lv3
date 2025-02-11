@@ -1,5 +1,4 @@
 import os
-import sys
 from pathlib import Path
 
 import pandas as pd
@@ -7,21 +6,18 @@ from dotenv import load_dotenv
 from supabase import create_client
 from supabase.lib.client_options import ClientOptions
 
-# Configure imports and environment
-EMBEDDINGS_DIR = Path(__file__).parent.parent.parent / "database"
-sys.path.append(str(EMBEDDINGS_DIR))
+# Load environment variables
+ROOT_DIR = Path(__file__).parents[2]  # Project root directory
+load_dotenv(ROOT_DIR / ".env")
 
-# Load environment variables from the embeddings directory
-ENV_PATH = EMBEDDINGS_DIR / ".env"
-load_dotenv(ENV_PATH)
-
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 
 # Supabase 클라이언트 초기화
 options = ClientOptions(postgrest_client_timeout=600)
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY, options)
+
 
 def load_all_sales_data(table_name, batch_size=1000):
     all_data = []
@@ -38,6 +34,7 @@ def load_all_sales_data(table_name, batch_size=1000):
 
     return pd.DataFrame(all_data) if all_data else None
 
+
 def load_product_info(low_stock_ids):
     """
     재고가 부족한 id 리스트를 받아서 product_info를 넘겨주는 함수
@@ -46,9 +43,8 @@ def load_product_info(low_stock_ids):
     return pd.DataFrame(response.data)
 
 
-
 # 월간 구매 데이터 로드
-month_df = load_all_sales_data('monthly_sales')
+month_df = load_all_sales_data("monthly_sales")
 if month_df is not None:
     print(f"총 {len(month_df)}개 행을 가져왔습니다.")
     print(month_df.head())
@@ -59,7 +55,7 @@ else:
 month_df["reorder_point"] = month_df.iloc[:, 1:].mean(axis=1) / 30 * 2 + 25
 print(month_df[["id", "reorder_point"]])
 
-inven_df = load_all_sales_data('product_inventory')
+inven_df = load_all_sales_data("product_inventory")
 if inven_df is not None:
     print(f"총 {len(inven_df)}개 행을 가져왔습니다.")
     print(inven_df.head())
@@ -79,8 +75,8 @@ print(low_stock_df[["id", "value", "reorder_point"]])
 
 # 재고 부족한 제품 ID 목록
 low_stock_ids = low_stock_df["id"].tolist()
-low_stock_df.rename(columns={'value': 'quantity'}, inplace=True) # 시연영상을 위한 코드
-low_stock_df['quantity'] = (low_stock_df['quantity'] // 1).astype(int)
+low_stock_df.rename(columns={"value": "quantity"}, inplace=True)  # 시연영상을 위한 코드
+low_stock_df["quantity"] = (low_stock_df["quantity"] // 1).astype(int)
 
 reorder_item_df = load_product_info(low_stock_ids)
 
@@ -97,10 +93,10 @@ print(reorder_item_df)
 
 # 두 데이터프레임을 id를 기준으로 병합
 reorder_product_df = pd.merge(
-    reorder_item_df[['id', 'main', 'sub1', 'sub2', 'sub3']],  # 필요한 열만 선택
-    low_stock_df[['id', 'quantity']],  # id와 quantity 열만 선택
-    on='id',  # 'id' 기준으로 병합
-    how='inner'  # 공통된 id만 병합 (inner join)
+    reorder_item_df[["id", "main", "sub1", "sub2", "sub3"]],  # 필요한 열만 선택
+    low_stock_df[["id", "quantity"]],  # id와 quantity 열만 선택
+    on="id",  # 'id' 기준으로 병합
+    how="inner",  # 공통된 id만 병합 (inner join)
 )
 
 # 결과 출력
@@ -111,12 +107,16 @@ data_to_insert = reorder_product_df.to_dict(orient="records")
 
 # Supabase에 데이터 삽입 (이미 존재하는 id는 건너뜀)
 if len(data_to_insert) != 0:
-    response = supabase.table("order_product").upsert(
-        data_to_insert,
-        on_conflict=["id"]  # 'id'가 이미 존재하면 삽입을 건너뜀
-    ).execute()
+    response = (
+        supabase.table("order_product")
+        .upsert(
+            data_to_insert,
+            on_conflict=["id"],  # 'id'가 이미 존재하면 삽입을 건너뜀
+        )
+        .execute()
+    )
     # 결과 확인
     if response.data:
         print("데이터 업로드 성공!")
     else:
-        print("업로드 실패:", response) 
+        print("업로드 실패:", response)

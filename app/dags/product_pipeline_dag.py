@@ -10,7 +10,6 @@ from product_categorizer import CategorySearch
 from supabase import create_client
 
 ROOT_DIR = Path(__file__).parents[2]  # Project rot directory
-
 with DAG(
     "product_pipeline",
     default_args={

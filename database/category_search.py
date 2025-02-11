@@ -44,7 +44,8 @@ class CategoryResult:
 
 class CategorySearch:
     def __init__(self):
-        load_dotenv()
+        ROOT_DIR = Path(__file__).parents[1]
+        load_dotenv(ROOT_DIR / ".env")
         self.client = OpenAI(
             api_key=os.getenv("UPSTAGE_API_KEY"), base_url=os.getenv("UPSTAGE_API_BASE_URL", "https://api.upstage.ai/v1/solar")
         )

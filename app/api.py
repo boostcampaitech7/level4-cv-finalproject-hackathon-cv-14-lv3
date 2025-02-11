@@ -14,8 +14,8 @@ EMBEDDINGS_DIR = Path(__file__).parent.parent / "database"
 sys.path.append(str(EMBEDDINGS_DIR))
 
 # Load environment variables from the embeddings directory
-ENV_PATH = EMBEDDINGS_DIR / ".env"
-load_dotenv(ENV_PATH)
+ROOT_DIR = Path(__file__).parents[1]
+load_dotenv(ROOT_DIR / ".env")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -38,6 +38,7 @@ class ProductInput(BaseModel):
 class BatchProductInput(BaseModel):
     products: list[ProductInput]
 
+
 class ItemListInput(BaseModel):
     item_list: str
 
@@ -56,6 +57,7 @@ async def send_to_n8n(data: dict):
     except Exception as e:
         print(f"Warning: Error sending data to n8n: {e!s}")
 
+
 async def run_process(command: list[str]):
     """webshop agent 프로세스 실행"""
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -68,6 +70,7 @@ async def run_process(command: list[str]):
         return {"status": "success", "message": "Process completed successfully", "output": stdout.decode()}
     else:
         return {"status": "error", "message": "Process failed", "error": stderr.decode()}
+
 
 @app.post("/purchase")
 async def purchase_item(params: ItemListInput):
@@ -83,11 +86,16 @@ async def purchase_item(params: ItemListInput):
         raise HTTPException(status_code=400, detail="item_list cannot be empty")
     try:
         command = [
-            "python", "webshop_agent/run.py",
-            "--num_trials", "1",
-            "--num_envs", "1",
-            "--run_name", "webshop_agent/http_run_logs_0",
-            "--item_list", params.item_list,
+            "python",
+            "webshop_agent/run.py",
+            "--num_trials",
+            "1",
+            "--num_envs",
+            "1",
+            "--run_name",
+            "webshop_agent/http_run_logs_0",
+            "--item_list",
+            params.item_list,
             "--run_http",
         ]
 
@@ -97,6 +105,7 @@ async def purchase_item(params: ItemListInput):
     except Exception as e:
         print(f"Error: {e!s}")
         return {"status": "error", "message": str(e)}
+
 
 def main():
     import socket
@@ -113,6 +122,7 @@ def main():
 
     print(f"Starting server on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)  # S104
+
 
 if __name__ == "__main__":
     main()
