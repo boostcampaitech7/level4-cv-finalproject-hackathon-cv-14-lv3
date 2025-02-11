@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -65,13 +66,13 @@ def webshop_text(session, page_type, query_string="", page_num=1, asin="", optio
     if page_type == "init":
         url = f"{WEBSHOP_URL}/{session}"
     if page_type == "search":
-        url = f"{WEBSHOP_URL}/search_results/{session}/" f"{query_string}/{page_num}"
+        url = f"{WEBSHOP_URL}/search_results/{session}/{query_string}/{page_num}"
     elif page_type == "item":
-        url = f"{WEBSHOP_URL}/item_page/{session}/" f"{asin}/{query_string}/{page_num}/{options}"
+        url = f"{WEBSHOP_URL}/item_page/{session}/{asin}/{query_string}/{page_num}/{options}"
     elif page_type == "item_sub":
-        url = f"{WEBSHOP_URL}/item_sub_page/{session}/" f"{asin}/{query_string}/{page_num}/{subpage}/{options}"
+        url = f"{WEBSHOP_URL}/item_sub_page/{session}/{asin}/{query_string}/{page_num}/{subpage}/{options}"
     elif page_type == "end":
-        url = f"{WEBSHOP_URL}/done/{session}/" f"{asin}/{options}"
+        url = f"{WEBSHOP_URL}/done/{session}/{asin}/{options}"
     html = requests.get(url).text  # type: ignore
     html_obj = BeautifulSoup(html, "html.parser")
     texts = html_obj.findAll(text=True)
@@ -320,7 +321,7 @@ def run_trial(
 
             # log env results to trial log
             with open(trial_log_path, "a") as wf:
-                wf.write(f'\n#####\n\nEnvironment #{z}:\n{final_env_history!s}\n\nSTATUS: {"OK" if is_success else "FAIL"}\n\n#####\n')
+                wf.write(f"\n#####\n\nEnvironment #{z}:\n{final_env_history!s}\n\nSTATUS: {'OK' if is_success else 'FAIL'}\n\n#####\n")
 
         except AssertionError:
             status_str: str = f"Environment #{z} Trial #{trial_idx}: FAIL({reward})"

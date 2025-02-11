@@ -45,7 +45,7 @@ with DAG(
 
             # trend_product 테이블에 데이터 저장
             try:
-                result = supabase.table("trend_product").insert(enriched_products).execute()
+                supabase.table("trend_product").insert(enriched_products).execute()
                 print(f"Successfully saved {len(enriched_products)} products to trend_product table")
             except Exception as e:
                 print(f"Error saving to trend_product table: {e}")
@@ -133,7 +133,7 @@ with DAG(
             print(f"Total products processed: {len(products)}")
             print(f"Successfully categorized: {success_count}")
             print(f"Failed to categorize: {fail_count}")
-            print(f"Success rate: {(success_count/len(products))*100:.2f}%")
+            print(f"Success rate: {(success_count / len(products)) * 100:.2f}%")
 
             # order_product 테이블에 저장
             if order_products:

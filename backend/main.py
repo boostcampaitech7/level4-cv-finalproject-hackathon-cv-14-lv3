@@ -2,6 +2,7 @@ import os
 import random
 import re
 import sqlite3
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -80,7 +81,7 @@ for col in categorical_columns:
 # 2. 임베딩 레이어 생성
 class CategoricalEmbedding(nn.Module):
     def __init__(self, input_sizes, embedding_dims):
-        super(CategoricalEmbedding, self).__init__()
+        super().__init__()
 
         # 각 범주형 변수에 대한 임베딩 레이어를 생성
         self.embeddings = nn.ModuleList(
@@ -153,13 +154,13 @@ test_input = make_predict_data(train_data)
 
 # Custom Dataset
 class CustomDataset(Dataset):
-    def __init__(self, X, Y):
-        self.X = X
-        self.Y = Y
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
 
     def __getitem__(self, index):
-        if self.Y is not None:
-            return torch.Tensor(self.X[index]), torch.Tensor(self.Y[index])
+        if self.y is not None:
+            return torch.Tensor(self.x[index]), torch.Tensor(self.y[index])
         return torch.Tensor(self.X[index])
 
     def __len__(self):
@@ -174,10 +175,10 @@ def inference(model, test_loader, device):
     predictions = []
 
     with torch.no_grad():
-        for X in tqdm(iter(test_loader)):
-            X = X.to(device)
+        for x in tqdm(iter(test_loader)):
+            x = x.to(device)
 
-            output = model(X)
+            output = model(x)
 
             # 모델 출력인 output을 CPU로 이동하고 numpy 배열로 변환
             output = output.cpu().numpy()
@@ -197,7 +198,7 @@ class Mish(nn.Module):
 
 class StackedLSTMModel(nn.Module):
     def __init__(self, input_size=34, hidden_size=1024, output_size=CFG["PREDICT_SIZE"], num_layers=3, dropout=0.5):
-        super(StackedLSTMModel, self).__init__()
+        super().__init__()
 
         self.hidden_size = hidden_size
         self.num_layers = num_layers
@@ -249,8 +250,8 @@ app.add_middleware(
 )
 
 # 환경 변수 로드
-ROOT_DIR = Path(__file__).parents[1]
-load_dotenv(ROOT_DIR / ".env")
+root_dir = Path(__file__).parents[1]
+load_dotenv(root_dir / ".env")
 UPSTAGE_API_KEY = os.getenv("UPSTAGE_API_KEY")
 UPSTAGE_API_BASE_URL = os.getenv("UPSTAGE_API_BASE_URL")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -694,7 +695,7 @@ async def chat_with_solar(message: dict):
 
         === 카테고리 분석 ===
         - 매출 상승률: {float(rise_rate):.1f}%
-        - 주요 성장 카테고리(소분류): {', '.join(subcat_list[:5])}
+        - 주요 성장 카테고리(소분류): {", ".join(subcat_list[:5])}
 
         === 재고 현황 ===
         - 재고 부족 상품 수: {total_low_stock}개
@@ -735,7 +736,7 @@ async def get_trend_categories():
         response = supabase.table("trend_product").select("category").execute()
 
         # 중복 제거 및 정렬
-        categories = sorted(list(set([item["category"] for item in response.data])))
+        categories = sorted({item["category"] for item in response.data})
 
         return {"status": "success", "categories": categories}
 
@@ -811,7 +812,9 @@ async def chat_with_trend(message: dict):
             5위: 블루투스스피커
 
             ▶ 트렌드 분석
-            웨어러블/IoT 기기에 대한 수요가 높게 나타났으며, 실내 공기질 관리 가전도 강세를 보이고 있습니다. 특히 무선이어폰과 스마트워치의 상위 랭크는 모바일 라이프스타일이 더욱 강화되고 있음을 시사합니다. 음향기기의 꾸준한 수요도 특징적입니다.
+            웨어러블/IoT 기기에 대한 수요가 높게 나타났으며, 실내 공기질 관리 가전도 강세를 보이고 있습니다.
+            특히 무선이어폰과 스마트워치의 상위 랭크는 모바일 라이프스타일이 더욱 강화되고 있음을 시사합니다.
+            음향기기의 꾸준한 수요도 특징입니다.
 
             ▶ 다음 달 트렌드 예측
             신학기를 앞두고 스마트기기 수요가 더욱 증가할 것으로 예상되며, 환절기 대비 공기질 관리 가전의 수요도 지속될 것으로 전망됩니다.
@@ -842,10 +845,12 @@ async def chat_with_trend(message: dict):
             5위: 여성 크로스백
 
             ▶ 트렌드 분석
-            동절기 필수 아이템인 패딩과 부츠가 강세를 보이고 있으며, 특히 여성 의류/잡화의 수요가 두드러집니다. 운동화는 남녀 모두에게 인기가 높아 캐주얼/스포티한 스타일이 트렌드임을 알 수 있습니다.
+            동절기 필수 아이템인 패딩과 부츠가 강세를 보이고 있으며, 특히 여성 의류/잡화의 수요가 두드러집니다.
+            운동화는 남녀 모두에게 인기가 높아 캐주얼/스포티한 스타일이 트렌드임을 알 수 있습니다.
 
             ▶ 다음 달 트렌드 예측
-            환절기로 접어들며 가벼운 아우터와 운동화 수요가 지속될 것으로 예상되며, 봄 시즌 새로운 스타일의 잡화 수요가 증가할 것으로 전망됩니다.
+            환절기로 접어들며 가벼운 아우터와 운동화 수요가 지속될 것으로 예상되며,
+            봄 시즌 새로운 스타일의 잡화 수요가 증가할 것으로 전망됩니다.
 
             Now, please analyze the following data using the same thought process:
             Category: {category}
@@ -879,11 +884,13 @@ async def chat_with_trend(message: dict):
         else:
             # 카테고리가 없는 경우 사용 가능한 카테고리 목록 반환
             available_categories = list(categorized_trends.keys())
+            categories_str = ", ".join(available_categories)
             return {
-                "response": f"죄송합니다. '{user_category}' 카테고리는 현재 트렌드 정보에 없습니다.\n\n조회 가능한 카테고리: {', '.join(available_categories)}",
+                "response": (
+                    f"죄송합니다. '{user_category}' 카테고리는 현재 트렌드 정보에 없습니다.\n\n조회 가능한 카테고리: {categories_str}"
+                ),
                 "status": "success",
             }
-
     except Exception as e:
         print(f"Error in trend-chat: {e!s}")
         return {"status": "error", "error": f"서버 오류가 발생했습니다: {e!s}"}
@@ -967,7 +974,7 @@ def get_daily_top_sales():
 
 
 @app.get("/api/inventory")
-def get_inventory(sort: str = None, main: str = None, sub1: str = None, sub2: str = None):
+def get_inventory(sort, main, sub1, sub2):
     try:
         response = (
             supabase.from_("product_inventory")
@@ -1015,7 +1022,7 @@ def get_inventory(sort: str = None, main: str = None, sub1: str = None, sub2: st
 
 # ✅ 카테고리 필터 엔드포인트
 @app.get("/api/category_filters")
-def get_category_filters(main: str = None, sub1: str = None, sub2: str = None):
+def get_category_filters(main, sub1, sub2):
     """
     선택된 main, sub1, sub2를 기반으로 가능한 sub1, sub2, sub3 목록 반환
     """
@@ -1228,15 +1235,15 @@ async def get_trend_products():
         return trend_df.to_dict(orient="records")
     except Exception as e:
         print(f"Error in get_trend_products: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/update-order-products")
-async def update_order_products(low_stock_items: list = Body(...)):
+async def update_order_products(low_stock_items: list = Body(...)):  # noqa B008
     try:
         # 현재 order_product 테이블의 상품 ID 목록 가져오기
         existing_orders = supabase.table("order_product").select("id").execute()
-        existing_ids = set(item["id"] for item in existing_orders.data)
+        existing_ids = {item["id"] for item in existing_orders.data}
 
         # 제품 정보 가져오기 (카테고리 정보용)
         product_info_response = supabase.from_("product_info").select("*").execute()
@@ -1265,7 +1272,7 @@ async def update_order_products(low_stock_items: list = Body(...)):
 
         if order_items:
             # 새로운 주문 데이터만 삽입
-            result = supabase.table("order_product").insert(order_items).execute()
+            supabase.table("order_product").insert(order_items).execute()
             return {"status": "success", "message": f"{len(order_items)}개 상품이 주문 목록에 추가되었습니다."}
 
         return {"status": "success", "message": "추가할 새로운 상품이 없습니다."}
@@ -1282,4 +1289,4 @@ async def update_order_products(low_stock_items: list = Body(...)):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run(app, host="127.0.0.1", port=8000, reload=False)
