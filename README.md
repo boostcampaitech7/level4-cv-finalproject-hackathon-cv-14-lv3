@@ -44,13 +44,17 @@ cd level4-cv-finalproject-hackathon-cv-14-lv3
 cd backend
 python main.py
 
+# API Server
+cd app
+python api.py  
+
 # Frontend
 cd frontend
 npm install
 npm start
 ```
 
-n8n workflow에 대한 자세한 설정 방법은 [Setup Guide](./docs/setup-guide.md)를 참고해주세요.
+더 자세한 설정 방법은 [Setup Guide](./docs/setup-guide.md)를 참고해주세요.
 
 
 ## 📦 Folder Structure
