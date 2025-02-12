@@ -3,6 +3,7 @@ import json
 import os
 from typing import Any
 
+from generate_reflections import update_memory
 from webshop_trial import run_trial
 
 
@@ -20,8 +21,10 @@ def get_args():
 
     args = parser.parse_args()
 
-    assert args.num_trials > 0, "Number of trials should be positive"
-    assert args.num_envs > 0, "Number of environments should be positive"
+    if args.num_trials <= 0:
+        raise ValueError("Number of trials should be positive")
+    if args.num_envs <= 0:
+        raise ValueError("Number of environments should be positive")
 
     return args
 
@@ -36,7 +39,7 @@ def main(args) -> None:
         if not os.path.exists(env_config_path):
             raise ValueError(f"Environment config file `{env_config_path}` does not exist")
         with open(env_config_path) as rf:
-            env_configs: list[Dict[str, Any]] = json.load(rf)
+            env_configs: list[dict[str, Any]] = json.load(rf)
 
     else:
         # Create the run directory
@@ -93,7 +96,7 @@ def main(args) -> None:
 
         # update memory if needed
         if args.use_memory:
-            env_configs: list[Dict[str, Any]] = update_memory(trial_log_path, env_configs)
+            env_configs: list[dict[str, Any]] = update_memory(trial_log_path, env_configs)
 
         # log env configs for trial
         with open(trial_env_configs_log_path, 'w') as wf:

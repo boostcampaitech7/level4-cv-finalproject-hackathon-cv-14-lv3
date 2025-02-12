@@ -60,7 +60,7 @@ async def send_to_n8n(data: dict):
 
 async def run_process(command: list[str]):
     """webshop agent 프로세스 실행"""
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)  # S603
 
     # Process 종료 대기
     stdout, stderr = await asyncio.to_thread(process.communicate)

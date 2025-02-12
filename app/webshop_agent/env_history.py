@@ -1,12 +1,14 @@
+
 class EnvironmentHistory:
-    def __init__(self, base_query: str, start_info, memory: list[str], history: list[dict[str, str]] = []) -> None:
+    def __init__(self, base_query: str, start_info, memory: list[str], history: list[dict[str, str]] | None = None) -> None:
         self._cur_query: str = f"{_get_base_query(base_query, start_info, memory)}"
-        self._history: list[dict[str, str]] = history
+        self._history: list[dict[str, str]] = history if history is not None else []
         self._last_action: str = ""
         self._is_exhausted: bool = False
 
     def add(self, label: str, value: str) -> None:
-        assert label in ["action", "observation", "human_edit"]
+        if label not in {"action", "observation", "human_edit"}:
+            raise ValueError(f"Invalid label: {label}. Expected one of ['action', 'observation', 'human_edit']")
         self._history += [
             {
                 "label": label,
@@ -27,7 +29,7 @@ class EnvironmentHistory:
 
     def __str__(self) -> str:
         s: str = self._cur_query + "\n"
-        for i, item in enumerate(self._history):
+        for _i, item in enumerate(self._history):
             if item["label"] == "action":
                 s += f"{item['value']}\n"
             elif item["label"] == "observation":
