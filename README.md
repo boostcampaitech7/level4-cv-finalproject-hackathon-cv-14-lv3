@@ -34,6 +34,7 @@
 
 - [Data](https://drive.google.com/file/d/16Dtf-Covz6-_RDhfMEyqVhFL-7yY5aeL/view?usp=drive_link)
 - [Weight](https://drive.google.com/file/d/1k9muoQNIuIaRxXhtsa9-kvhXbv9L-elO/view?usp=drive_link)
+- [WebShop](https://github.com/princeton-nlp/WebShop)
 
 1. Repository Clone
 ```bash
