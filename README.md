@@ -98,4 +98,4 @@ npm start
 ![챗봇_ppt](https://github.com/user-attachments/assets/cdbb3b4e-df05-47fc-bad4-d90fd76f3e6b)
 
 ## 📝 Wrap up Report
-!다음 링크에서 저희조의 랩업리포트를 확인하실 수 있습니다: [Wrap up Report]()
+!다음 링크에서 저희조의 랩업리포트를 확인하실 수 있습니다: [Wrap up Report](https://github.com/boostcampaitech7/level4-cv-finalproject-hackathon-cv-14-lv3/blob/main/docs/wrapup_report.pdf)
