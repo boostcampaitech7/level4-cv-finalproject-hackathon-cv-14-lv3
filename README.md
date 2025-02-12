@@ -13,14 +13,6 @@
 |:----:|:----:|:----:|:----:|:----:|:----:|
 | [<img src="https://avatars.githubusercontent.com/u/84124094?v=4" alt="" style="width:100px;100px;">](https://github.com/taehan79-kim) <br/> | [<img src="https://github.com/user-attachments/assets/ea61c11c-c577-45bb-ae8e-64dffa192402" alt="" style="width:100px;100px;">](https://github.com/mooniswan) <br/> | [<img src="https://avatars.githubusercontent.com/u/87591965?v=4" alt="" style="width:100px;100px;">](https://github.com/Donghwan127) <br/> | [<img src="https://avatars.githubusercontent.com/u/152387005?v=4" alt="" style="width:100px;100px;">](https://github.com/Namgyu-Youn) <br/> | [<img src="https://github.com/user-attachments/assets/3ed91d99-0ad0-43ee-bb11-0aefc61a0a0e" alt="" style="width:100px;100px;">](https://github.com/syous154) <br/> | [<img src="https://github.com/user-attachments/assets/04f5faa7-05c4-4ecc-87f1-0befb53da70d" alt="" style="width:100px;100px;">](https://github.com/zangzoo) <br/> |
 
-## 📝 Wrap up Report
-
-<a href="https://github.com/boostcampaitech7/level2-cv-semanticsegmentation-cv-14-lv3/blob/main/docs/Wrap_up_Report_CV14.pdf">
-  <img src="https://img.shields.io/badge/WrapUp_Report-white?style=for-the-badge&logo=adobeacrobatreader&logoColor=red" alt="Data-Centric report">
-
-
-
-
 ## 🔧 Tools
 
 - 🧑‍💻 Programming : GitHub, VScode
