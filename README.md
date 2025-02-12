@@ -96,3 +96,6 @@ npm start
 ![대시보드_ppt](https://github.com/user-attachments/assets/4d97c0cd-e1aa-4ca1-968c-a0b392e14ab6)
 ![인벤토리](https://github.com/user-attachments/assets/953f676c-77a4-4d5a-80f2-503e12616636)
 ![챗봇_ppt](https://github.com/user-attachments/assets/cdbb3b4e-df05-47fc-bad4-d90fd76f3e6b)
+
+## 📝 Wrap up Report
+!다음 링크에서 저희조의 랩업리포트를 확인하실 수 있습니다: [Wrap up Report]()
