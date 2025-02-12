@@ -50,8 +50,9 @@ npm install
 npm start
 ```
 
+<!--
 더 자세한 설정 방법은 [Setup Guide](./docs/setup-guide.md)를 참고해주세요.
-
+-->
 
 ## 📦 Folder Structure
 
