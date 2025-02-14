@@ -2,6 +2,7 @@
 env
 .env
 *lib
+poetry.lock
 
 # Cache files
 *.pyc
