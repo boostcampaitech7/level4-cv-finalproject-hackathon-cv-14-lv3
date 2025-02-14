@@ -8,7 +8,6 @@ on:
     paths:
       - '.github/workflows/n8n/**.json'
 
-# 중요: PR 체크에 이 워크플로우를 포함하기 위한 설정
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -16,7 +15,6 @@ concurrency:
 jobs:
   validate-images:
     runs-on: ubuntu-latest
-    # 중요: PR 체크에 이 결과가 반영되도록 설정
     permissions:
       contents: read
       pull-requests: read
@@ -27,9 +25,13 @@ jobs:
 
       - name: Check for matching image files
         id: check-images
+        shell: bash
         run: |
           # Find all JSON files in the n8n directory
           json_files=$(find .github/workflows/n8n -name "*.json")
+
+          # Define supported image extensions
+          declare -a image_extensions=("png" "PNG" "jpg" "JPG" "jpeg" "JPEG")
 
           # Initialize error flag
           error=0
@@ -37,26 +39,41 @@ jobs:
 
           # Check each JSON file
           for json_file in $json_files; do
-            # Get the corresponding PNG file path
-            png_file="${json_file%.json}.png"
+            # Get the base path without extension
+            base_path="${json_file%.json}"
 
-            # Check if PNG exists
-            if [ ! -f "$png_file" ]; then
+            # Initialize flag for current JSON file
+            found_image=0
+
+            # Check for each supported image extension
+            for ext in "${image_extensions[@]}"; do
+              if [ -f "${base_path}.${ext}" ]; then
+                found_image=1
+                break
+              fi
+            done
+
+            # If no image was found for this JSON, add to missing files
+            if [ $found_image -eq 0 ]; then
               error=1
-              missing_files="$missing_files\n- ${png_file#.github/workflows/n8n/}"
+              file_name="${json_file#.github/workflows/n8n/}"
+              base_name="${file_name%.json}"
+              missing_files="$missing_files\n- ${base_name} (needs one of: ${image_extensions[*]})"
             fi
           done
 
-          # Set output
+          # Set output and display results
           if [ $error -eq 1 ]; then
-            echo "Missing image files:$missing_files"
+            echo "Missing image files for the following workflows:$missing_files"
             echo "status=failed" >> $GITHUB_OUTPUT
           else
+            echo "All workflows have corresponding image files"
             echo "status=success" >> $GITHUB_OUTPUT
           fi
 
       - name: Fail if images are missing
         if: steps.check-images.outputs.status == 'failed'
+        shell: bash
         run: |
-          echo "Error: Some workflow JSON files are missing their corresponding PNG files"
+          echo "Error: Some workflow JSON files are missing their corresponding image files"
           exit 1
