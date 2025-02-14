@@ -3,10 +3,12 @@ name: Validate N8N Workflow Images
 on:
   push:
     branches: [ main, deployment ]
+    paths:
+      - '.github/workflows/n8n/**'
   pull_request:
     branches: [ main, deployment ]
     paths:
-      - '.github/workflows/n8n/**.json'
+      - '.github/workflows/n8n/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
