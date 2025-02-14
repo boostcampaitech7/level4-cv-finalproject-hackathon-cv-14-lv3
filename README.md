@@ -13,14 +13,6 @@
 |:----:|:----:|:----:|:----:|:----:|:----:|
 | [<img src="https://avatars.githubusercontent.com/u/84124094?v=4" alt="" style="width:100px;100px;">](https://github.com/taehan79-kim) <br/> | [<img src="https://github.com/user-attachments/assets/ea61c11c-c577-45bb-ae8e-64dffa192402" alt="" style="width:100px;100px;">](https://github.com/mooniswan) <br/> | [<img src="https://avatars.githubusercontent.com/u/87591965?v=4" alt="" style="width:100px;100px;">](https://github.com/Donghwan127) <br/> | [<img src="https://avatars.githubusercontent.com/u/152387005?v=4" alt="" style="width:100px;100px;">](https://github.com/Namgyu-Youn) <br/> | [<img src="https://github.com/user-attachments/assets/3ed91d99-0ad0-43ee-bb11-0aefc61a0a0e" alt="" style="width:100px;100px;">](https://github.com/syous154) <br/> | [<img src="https://github.com/user-attachments/assets/04f5faa7-05c4-4ecc-87f1-0befb53da70d" alt="" style="width:100px;100px;">](https://github.com/zangzoo) <br/> |
 
-## 📝 Wrap up Report
-
-<a href="https://github.com/boostcampaitech7/level2-cv-semanticsegmentation-cv-14-lv3/blob/main/docs/Wrap_up_Report_CV14.pdf">
-  <img src="https://img.shields.io/badge/WrapUp_Report-white?style=for-the-badge&logo=adobeacrobatreader&logoColor=red" alt="Data-Centric report">
-
-
-
-
 ## 🔧 Tools
 
 - 🧑‍💻 Programming : GitHub, VScode
@@ -31,6 +23,10 @@
 ## 🚀 Setup & Installation
 
 프로젝트를 실행하기 위한 기본 설정입니다:
+
+- [Data](https://drive.google.com/file/d/16Dtf-Covz6-_RDhfMEyqVhFL-7yY5aeL/view?usp=drive_link)
+- [Weight](https://drive.google.com/file/d/1k9muoQNIuIaRxXhtsa9-kvhXbv9L-elO/view?usp=drive_link)
+- [WebShop](https://github.com/princeton-nlp/WebShop)
 
 1. Repository Clone
 ```bash
@@ -54,8 +50,9 @@ npm install
 npm start
 ```
 
+<!--
 더 자세한 설정 방법은 [Setup Guide](./docs/setup-guide.md)를 참고해주세요.
-
+-->
 
 ## 📦 Folder Structure
 
@@ -99,3 +96,6 @@ npm start
 ![대시보드_ppt](https://github.com/user-attachments/assets/4d97c0cd-e1aa-4ca1-968c-a0b392e14ab6)
 ![인벤토리](https://github.com/user-attachments/assets/953f676c-77a4-4d5a-80f2-503e12616636)
 ![챗봇_ppt](https://github.com/user-attachments/assets/cdbb3b4e-df05-47fc-bad4-d90fd76f3e6b)
+
+## 📝 Wrap up Report
+!다음 링크에서 저희조의 랩업리포트를 확인하실 수 있습니다: [Wrap up Report](https://github.com/boostcampaitech7/level4-cv-finalproject-hackathon-cv-14-lv3/blob/main/docs/wrapup_report.pdf)

@@ -10,7 +10,7 @@ cd level4-cv-finalproject-hackathon-cv-14-lv3
 
 2. How to Run
 ```bash
-# Backend
-cd backend
-python main.py
+# API Server
+cd app
+python api.py
 ```
