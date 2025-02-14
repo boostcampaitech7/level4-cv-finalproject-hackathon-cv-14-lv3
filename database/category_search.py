@@ -4,6 +4,7 @@ import os
 import re
 from collections import defaultdict
 from dataclasses import dataclass
+from pathlib import Path
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -44,8 +45,8 @@ class CategoryResult:
 
 class CategorySearch:
     def __init__(self):
-        ROOT_DIR = Path(__file__).parents[1]
-        load_dotenv(ROOT_DIR / ".env")
+        root_dir = Path(__file__).parents[1]
+        load_dotenv(root_dir / ".env")
         self.client = OpenAI(
             api_key=os.getenv("UPSTAGE_API_KEY"), base_url=os.getenv("UPSTAGE_API_BASE_URL", "https://api.upstage.ai/v1/solar")
         )
@@ -178,10 +179,7 @@ class CategorySearch:
                 examples.extend(self.example_cases[cat][:1])  # 각 카테고리당 1개 예제만 사용
 
         examples_str = "\n\n".join(
-            f"Input: \"{example['input']}\"\n"
-            f"Category: {example['category']}\n"
-            f"Confidence: 0.95\n"
-            f"Reasoning: {example['reasoning']}"
+            f'Input: "{example["input"]}"\nCategory: {example["category"]}\nConfidence: 0.95\nReasoning: {example["reasoning"]}'
             for example in examples[:3]  # 최대 3개 예제만 사용
         )
 

@@ -60,8 +60,9 @@ async def send_to_n8n(data: dict):
 
 async def run_process(command: list[str]):
     """webshop agent 프로세스 실행"""
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
+    process = subprocess.Popen(  # noqa: S603
+        command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False
+    )
     # Process 종료 대기
     stdout, stderr = await asyncio.to_thread(process.communicate)
 
@@ -114,14 +115,14 @@ def main():
 
     def is_port_in_use(port):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            return s.connect_ex(("0.0.0.0", port)) == 0  # S104
+            return s.connect_ex(("127.0.0.1", port)) == 0
 
     port = 8888
     while is_port_in_use(port) and port < 8020:
         port += 1
 
     print(f"Starting server on port {port}")
-    uvicorn.run(app, host="0.0.0.0", port=port)  # S104
+    uvicorn.run(app, host="127.0.0.1", port=port)
 
 
 if __name__ == "__main__":

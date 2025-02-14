@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -24,12 +25,17 @@ with open("webshop_agent/base_prompt.txt") as f:
     BASE_PROMPT = f.read()
 
 
-def llm(prompt, stop=["\n"]):
+def llm(prompt, stop=None):
+    if stop is None:
+        stop = ["\n"]
     try:
         cur_try = 0
         while cur_try < 6:
             messages = []
-            system = "You run in a loop of Action, Observation..\n **IMPORTANT**: 1. Never include Observation in your answer! 2. Answer just one action! \n"
+            system = (
+                "You run in a loop of Action, Observation..\n "
+                "**IMPORTANT**: 1. Never include Observation in your answer! 2. Answer just one action! \n"
+            )
             messages.append({"role": "system", "content": system})
             messages.append({"role": "user", "content": prompt})
             stream = client.chat.completions.create(
@@ -61,18 +67,20 @@ def tag_visible(element):
     return element.parent.name not in ignore and not isinstance(element, Comment)
 
 
-def webshop_text(session, page_type, query_string="", page_num=1, asin="", options={}, subpage="", **kwargs):
+def webshop_text(session, page_type, query_string="", page_num=1, asin="", options=None, subpage="", **kwargs):
+    if options is None:
+        options = {}
     if page_type == "init":
         url = f"{WEBSHOP_URL}/{session}"
     if page_type == "search":
-        url = f"{WEBSHOP_URL}/search_results/{session}/" f"{query_string}/{page_num}"
+        url = f"{WEBSHOP_URL}/search_results/{session}/{query_string}/{page_num}"
     elif page_type == "item":
-        url = f"{WEBSHOP_URL}/item_page/{session}/" f"{asin}/{query_string}/{page_num}/{options}"
+        url = f"{WEBSHOP_URL}/item_page/{session}/{asin}/{query_string}/{page_num}/{options}"
     elif page_type == "item_sub":
-        url = f"{WEBSHOP_URL}/item_sub_page/{session}/" f"{asin}/{query_string}/{page_num}/{subpage}/{options}"
+        url = f"{WEBSHOP_URL}/item_sub_page/{session}/{asin}/{query_string}/{page_num}/{subpage}/{options}"
     elif page_type == "end":
-        url = f"{WEBSHOP_URL}/done/{session}/" f"{asin}/{options}"
-    html = requests.get(url).text  # type: ignore
+        url = f"{WEBSHOP_URL}/done/{session}/{asin}/{options}"
+    html = requests.get(url, timeout=10).text  # type: ignore
     html_obj = BeautifulSoup(html, "html.parser")
     texts = html_obj.findAll(text=True)
     visible_texts = list(filter(tag_visible, texts))
@@ -134,7 +142,7 @@ def webshop_text(session, page_type, query_string="", page_num=1, asin="", optio
         return clean_str(observation), info
 
 
-class webshopEnv:
+class WebshopEnv:
     def __init__(self):
         self.sessions = {}
 
@@ -146,28 +154,39 @@ class webshopEnv:
         elif action.startswith("think["):
             observation = "OK."
         elif action.startswith("search["):
-            assert self.sessions[session]["page_type"] == "init"
+            if self.sessions[session]["page_type"] != "init":
+                raise AssertionError(f"Expected 'init' page_type, but got {self.sessions[session]['page_type']}")
             query = action[7:-1]
             self.sessions[session] = {"session": session, "page_type": "search", "query_string": query, "page_num": 1}
         elif action.startswith("click["):
             position = action.find("]")
             button = action[6:position]
             if button == "Buy Now":
-                assert self.sessions[session]["page_type"] == "item"
+                if self.sessions[session]["page_type"] != "item":
+                    raise AssertionError(f"Expected 'item' page_type, but got {self.sessions[session]['page_type']}")
                 self.sessions[session]["page_type"] = "end"
                 print(f"Buy {self.sessions[session]['asin']} Successfully.")
                 done = True
             elif button == "Back to Search":
-                assert self.sessions[session]["page_type"] in ["search", "item_sub", "item"]
+                if self.sessions[session]["page_type"] not in ["search", "item_sub", "item"]:
+                    raise AssertionError(
+                        f"Expected 'page_type' to be one of ['search', 'item_sub', 'item'], "
+                        f"but got {self.sessions[session]['page_type']}"
+                    )
                 self.sessions[session] = {"session": session, "page_type": "init"}
             elif button == "Next >":
-                assert False  # ad hoc page limitation
-                assert self.sessions[session]["page_type"] == "search"
+                raise AssertionError("Ad hoc page limitation reached. This page should not be processed.")  # ad hoc page limitation
+                if self.sessions[session]["page_type"] != "search":
+                    raise AssertionError(f"Unexpected page type: {self.sessions[session]['page_type']}. Expected 'search'.")
                 self.sessions[session]["page_num"] += 1
             elif button == "< Prev":
-                assert self.sessions[session]["page_type"] in ["search", "item_sub", "item"]
+                if self.sessions[session]["page_type"] not in ["search", "item_sub", "item"]:
+                    raise AssertionError(
+                        f"Unexpected page type: {self.sessions[session]['page_type']}. "
+                        f"Expected one of ['search', 'item_sub', 'item']."
+                    )
                 if self.sessions[session]["page_type"] == "search":
-                    assert False
+                    raise AssertionError("Ad hoc page limitation reached.")
                     self.sessions[session]["page_num"] -= 1
                 elif self.sessions[session]["page_type"] == "item_sub":
                     self.sessions[session]["page_type"] = "item"
@@ -175,27 +194,28 @@ class webshopEnv:
                     self.sessions[session]["page_type"] = "search"
                     self.sessions[session]["options"] = {}
             elif button in ACTION_TO_TEMPLATE:
-                assert self.sessions[session]["page_type"] == "item"
+                if self.sessions[session]["page_type"] != "item":
+                    raise AssertionError(f"Unexpected page type: {self.sessions[session]['page_type']}")
                 self.sessions[session]["page_type"] = "item_sub"
                 self.sessions[session]["subpage"] = button
             else:
                 if self.sessions[session]["page_type"] == "search":
-                    assert button in self.sessions[session].get("asins", [])  # must be asins
+                    if button not in self.sessions[session].get("asins", []): # must be asins
+                        raise AssertionError(f"Button {button} is not in the list of valid ASINs.")
                     self.sessions[session]["page_type"] = "item"
                     self.sessions[session]["asin"] = button
                 elif self.sessions[session]["page_type"] == "item":
-                    assert "option_types" in self.sessions[session]
-                    assert button in self.sessions[session]["option_types"], (
-                        button,
-                        self.sessions[session]["option_types"],
-                    )  # must be options
+                    if "option_types" not in self.sessions[session]:
+                        raise AssertionError(f"'option_types' key is missing in session {session}.")
+                    if button not in self.sessions[session]["option_types"]:  # must be options
+                        raise AssertionError(f"Button '{button}' is not a valid option in {self.sessions[session]['option_types']}.")
                     option_type = self.sessions[session]["option_types"][button]
                     if "options" not in self.sessions[session]:
                         self.sessions[session]["options"] = {}
                     self.sessions[session]["options"][option_type] = button
                     observation_ = f"You have clicked {button}."
         else:
-            assert False
+            raise AssertionError("An unexpected Action!!")
         observation, info = webshop_text(**self.sessions[session])
         if observation_:
             observation = observation_
@@ -206,13 +226,15 @@ class webshopEnv:
 
 def webshop_run(idx, env, base_prompt, memory: list[str], to_print=True, run_http=False, item="") -> tuple[EnvironmentHistory, bool]:
     action = "reset"
-    system_prompt = "You run in a loop of Action, Observation..\n **IMPORTANT**: 1. Never include Observation in your answer! 2. Complete the action answer one by one! \n"
-    init_prompt = system_prompt + base_prompt
+    system_prompt = (
+        "You run in a loop of Action, Observation..\n "
+        "**IMPORTANT**: 1. Never include Observation in your answer! 2. Complete the action answer one by one! \n"
+    )
     prompt = ""
 
     res = env.step(idx, action)
     observation = res[0]
-    if action == "reset" and run_http == True:
+    if action == "reset" and run_http:
         observation = f"""
 WebShop
 Instruction:
@@ -233,7 +255,7 @@ i am looking for {item}.
                     env_history.add("action", action)
                 res = env.step(idx, action)
                 observation = res[0]
-            if action == "reset" and run_http == True:
+            if action == "reset" and run_http:
                 observation = f"""
 WebShop
 Instruction:
@@ -259,7 +281,7 @@ i am looking for {item}.
             return env_history, res[1] == 1.0, res[1]
 
         action = llm(f"{system_prompt}{env_history}", stop=["\n"]).lstrip(" ")
-        if i == 14 and res[2] == False:
+        if i == 14 and not res[2]:
             print(f"Buy {idx} Fail: Attempt count exceeded")
 
     return env_history, False, 0.0
@@ -274,7 +296,7 @@ def run_trial(
     run_http: bool = False,
     item_string: str = "",
 ) -> list[dict[str, Any]]:
-    env = webshopEnv()
+    env = WebshopEnv()
 
     num_successes: int = 0
     sum_reward: float = 0.0
@@ -320,7 +342,7 @@ def run_trial(
 
             # log env results to trial log
             with open(trial_log_path, "a") as wf:
-                wf.write(f'\n#####\n\nEnvironment #{z}:\n{final_env_history!s}\n\nSTATUS: {"OK" if is_success else "FAIL"}\n\n#####\n')
+                wf.write(f"\n#####\n\nEnvironment #{z}:\n{final_env_history!s}\n\nSTATUS: {'OK' if is_success else 'FAIL'}\n\n#####\n")
 
         except AssertionError:
             status_str: str = f"Environment #{z} Trial #{trial_idx}: FAIL({reward})"
