@@ -1,0 +1,314 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        20,
+        160
+      ],
+      "id": "2b6e828d-f1a4-4ded-a228-23b81fa2fedc",
+      "name": "When chat message received",
+      "webhookId": "6bb1eb48-fcdc-45ab-b4bd-c570ce4b117b"
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        360,
+        360
+      ],
+      "id": "f3f012fc-9dc7-42c4-9bd8-f04338ec733b",
+      "name": "Window Buffer Memory"
+    },
+    {
+      "parameters": {
+        "options": {
+          "gl": "kr",
+          "device": "desktop",
+          "no_cache": true,
+          "google_domain": "google.co.kr",
+          "hl": "ko"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolSerpApi",
+      "typeVersion": 1,
+      "position": [
+        860,
+        560
+      ],
+      "id": "ff577d9e-eeb0-4f31-b8ec-c7823c73c257",
+      "name": "SerpAPI",
+      "credentials": {
+        "serpApi": {
+          "id": "zYQnL0rcj0biLygF",
+          "name": "SerpAPI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "Trend_Tool",
+        "description": "A trend-searching workflow that recommends revenue-boosting products based on user input.",
+        "workflowId": {
+          "__rl": true,
+          "value": "bkhEAuk5y5qpaYb9",
+          "mode": "list",
+          "cachedResultName": "Trend-Search-Workflow"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2,
+      "position": [
+        560,
+        740
+      ],
+      "id": "f5e621ac-ec0a-4c45-bd90-5a8a9be30cf7",
+      "name": "Call Trend Tool"
+    },
+    {
+      "parameters": {
+        "name": "Recall_Tool",
+        "description": "A recall workflow that notifies you of recalled products based on the store database.",
+        "workflowId": {
+          "__rl": true,
+          "value": "dUeryqbPQ2bruLXi",
+          "mode": "list",
+          "cachedResultName": "Recall-Workflow"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2,
+      "position": [
+        560,
+        560
+      ],
+      "id": "2e901836-4c7c-474c-bcc6-89226f103ea1",
+      "name": "Call Recall Tool"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "solar-pro",
+          "mode": "id"
+        },
+        "options": {
+          "responseFormat": "text",
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        360
+      ],
+      "id": "44ba644d-0581-4c06-a3b0-9d26731a9f7d",
+      "name": "Solar Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "1NzrEJLMzjNtK0g8",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.toolWikipedia",
+      "typeVersion": 1,
+      "position": [
+        960,
+        560
+      ],
+      "id": "e5c251d1-b826-4a02-a021-3ae49525acd8",
+      "name": "Wikipedia"
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are a Web Search AI Agent for retail inventory management that utilises Recall Tool, Trend Tool, SERP Tool, and Wikipedia Tool.\n\nTOOL SELECTION RULES:\n1. When input contains \"리콜\" or related safety terms: Use Recall Tool first.\n2. When input contains trend-related terms: Use Trend Tool first.\n3. For general queries: Use SERP Tool or Wikipedia Tool.\n\nOUTPUT REQUIREMENTS:\n1. Format: Structured JSON\n2. All user-facing responses must be in Korean.\n\nYour primary focus is to provide **actionable insights for inventory management**, such as identifying recalled products, emerging trends, or critical information that can directly impact store operations.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        320,
+        160
+      ],
+      "id": "60e84ede-e66d-4f15-b813-8835653b2f02",
+      "name": "Web Search Agent"
+    },
+    {
+      "parameters": {
+        "path": "6267036d-c551-49d7-8777-856197a4c48a",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        20,
+        0
+      ],
+      "id": "0ab4d85d-7bdc-44b9-8ca1-cc47d098ec9d",
+      "name": "Webhook",
+      "webhookId": "6267036d-c551-49d7-8777-856197a4c48a"
+    },
+    {
+      "parameters": {
+        "content": "### [Recall Info Workflow]\n- KATS 제품안전정보센터\n국내리콜 정보 활용",
+        "width": 320
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        360,
+        520
+      ],
+      "id": "80d2e483-f058-4fd1-8a02-720ede57840d",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "### [Trend Info Workflow]\n- Naver Datalab\n통합검색어 트렌드 API 호출\n\n",
+        "width": 320
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        360,
+        700
+      ],
+      "id": "4db59657-8fa2-42e2-8be6-4b547b3cff74",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "#### [Basic Search Tool]\n\n",
+        "width": 340
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        720,
+        520
+      ],
+      "id": "e96a27d2-b616-454c-b8b9-59f262af381b",
+      "name": "Sticky Note"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Web Search Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Web Search Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SerpAPI": {
+      "ai_tool": [
+        [
+          {
+            "node": "Web Search Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Trend Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "Web Search Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Recall Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "Web Search Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Solar Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Web Search Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wikipedia": {
+      "ai_tool": [
+        [
+          {
+            "node": "Web Search Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "fea0067f-bb60-44de-855e-b247de3f953b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2bf14225034dfb2d8498032d805718ab7af6ff6458c61a42e219515f095f1c9f"
+  },
+  "id": "Ra7oxowjtYrW5uSa",
+  "tags": []
+}

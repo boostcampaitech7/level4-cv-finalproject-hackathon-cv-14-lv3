@@ -1,0 +1,41 @@
+# Environment
+env
+.env
+*lib
+poetry.lock
+
+# Cache files
+*.pyc
+*.exe
+*.log
+*.bin
+.pytest_cache
+__pycache__/
+*.pth
+
+# Ruff
+-unsafe-fixes
+.ruff_cache
+.coverage
+
+# Database
+*.db
+*.sql
+*.csv
+node_modules/
+credentials.json
+
+# Webshop
+app/webshop_agent/**/*.json
+
+# Backend
+backend/edit_supabase.py
+
+# Airflow setting files
+app/dags/src
+app/logs
+app/src
+appairflow/
+*.err
+*.out
+*.pid
