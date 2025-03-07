@@ -1,0 +1,25 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "7860:7860"
+    deploy:
+      resources:
+        limits:
+          memory: 30G
+        reservations:
+          memory: 4G  # Minimum memory reservation
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 40s  # Additional time for startup
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped  # Auto-restart on failure
