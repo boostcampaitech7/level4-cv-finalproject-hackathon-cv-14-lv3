@@ -1,55 +1,32 @@
 exclude: |
-    (?x)(
-        # 문서 파일
-        ^.*\.md$|
-        ^docs/|
+  (?x)(
+      # Docs
+      ^.*\.md$|
+      ^docs/|
 
-        # 노트북 및 실험 파일
-        ^notebooks/|
-        ^experiments/|
-        ^wandb/|
-        ^logs/|
-        ^runs/|
+      # Cache files
+      ^.pytest_cache/|
+      ^__pycache__/|
 
-        # 데이터 및 모델 파일
-        ^data/|
-        ^datasets/|
-        ^checkpoints/|
-        ^weights/|
-        ^.*\.pth$|
-        ^.*\.ckpt$|
-        ^.*\.h5$|
-        ^.*\.onnx$|
-
-        # 캐시 및 생성 파일
-        ^.pytest_cache/|
-        ^__pycache__/|
-        ^build/|
-        ^dist/|
-        ^.*\.egg-info/|
-
-        # 기타 설정 파일
-        ^\.env|
-        ^\.venv/|
-        ^venv/|
-        ^\.idea/|
-        ^\.vscode/
-    )
-
+      ^\.env|
+      ^\.vscode/
+  )
 repos:
-    - repo: https://github.com/pre-commit/pre-commit-hooks
-      rev: v5.0.0
-      hooks:
-          - id: trailing-whitespace
-          - id: end-of-file-fixer
-          - id: check-yaml
-          - id: check-toml
-          - id: debug-statements
-          - id: check-added-large-files
-            args: ["--maxkb=1024"]
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+        types_or: [python, jupyter]
 
-    - repo: https://github.com/astral-sh/ruff-pre-commit
-      rev: v0.9.0
-      hooks:
-          - id: ruff
-            args: [--fix, --exit-non-zero-on-fix]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: trailing-whitespace

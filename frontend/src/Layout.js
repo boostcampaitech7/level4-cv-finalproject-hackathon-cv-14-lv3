@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';  
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { MessageSquare, BarChart2, Package } from 'lucide-react';
 import ChatPage from './ChatPage';
 import DashPage from './DashPage';
@@ -30,9 +30,9 @@ const Layout = () => {
             {/* 로고 영역 */}
             <div style={styles.logo}>
             {/* 임시 title */}
-            <h1 style={styles.title}>StockSense</h1> 
+            <h1 style={styles.title}>StockSense</h1>
             </div>
-            
+
             {/* 네비게이션 메뉴 */}
             <nav style={styles.nav}>
             {menuItems.map(({ id, icon: Icon, label }) => (
@@ -71,20 +71,20 @@ const Layout = () => {
             backgroundColor: '#f8f9fa'
         },
         sidebar: {
-            width: '290px', // sidebar너비 증가 
+            width: '290px', // sidebar너비 증가
             backgroundColor: 'white',
             boxShadow: '2px 0 4px rgba(0,0,0,0.1)',
             display: 'flex',
             flexDirection: 'column',
-            borderRight: '1px solid #eee' 
+            borderRight: '1px solid #eee'
         },
         logo: {
-            padding: '28px 24px', 
+            padding: '28px 24px',
             borderBottom: '1px solid #eee',
-            backgroundColor: '#fafafa' 
+            backgroundColor: '#fafafa'
         },
         title: {
-            fontSize: '24px', 
+            fontSize: '24px',
             fontWeight: 'bold',
             color: '#333',
             margin: 0,
@@ -94,7 +94,7 @@ const Layout = () => {
             marginTop: '28px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '8px' 
+            gap: '8px'
         },
         menuItem: {
             width: 'calc(100% - 48px)',
@@ -117,15 +117,15 @@ const Layout = () => {
         },
         activeMenuItem: {
             backgroundColor: '#f0f7ff', // 활성 메뉴 배경색
-            color: '#1a73e8', // 활성 메뉴 텍스트 색상 
+            color: '#1a73e8', // 활성 메뉴 텍스트 색상
             fontWeight: '600',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.05)' 
+            boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
         },
         icon: {
-            width: '22px', 
+            width: '22px',
             height: '22px',
             marginRight: '14px',
-            strokeWidth: 2 
+            strokeWidth: 2
         },
         mainContent: {
             flex: 1,

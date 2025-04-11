@@ -9,7 +9,7 @@ log_path = 'test_run_logs_0/trial_0.log'
 def split_by_reset(log_list):
     result = []
     current_list = []
-    
+
     for item in log_list:
         if item == "reset":
             if current_list:
@@ -17,11 +17,11 @@ def split_by_reset(log_list):
             current_list = [item]  # reset이 있으면 새로운 리스트 시작
         else:
             current_list.append(item)
-    
+
     # 마지막 리스트가 비어있지 않으면 추가
     if current_list:
         result.append(current_list)
-    
+
     return result
 
 with open(log_path) as file:
