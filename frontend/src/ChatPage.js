@@ -30,7 +30,7 @@ const ChatPage = () => {
     const userChoice = selectedMode === 'data' ? '데이터 기반 조회' : '트렌드 분석';
 
     if (selectedMode === 'data') {
-      setChatHistory((prev) => [...prev, 
+      setChatHistory((prev) => [...prev,
         { sender: 'user', content: userChoice },
         { sender: 'bot', content: '데이터 기반 조회를 선택하셨습니다. 어떤 정보를 조회하시겠습니까?' }
       ]);
@@ -38,8 +38,8 @@ const ChatPage = () => {
       const response = await fetch('http://localhost:8000/api/trend-categories');
       const data = await response.json();
       const categoriesList = data.categories.join('\n');
-      
-      setChatHistory((prev) => [...prev, 
+
+      setChatHistory((prev) => [...prev,
         { sender: 'user', content: userChoice },
         { sender: 'bot', content: `트렌드 분석을 선택하셨습니다. 조회할 수 있는 카테고리는 아래와 같습니다:\n\n${categoriesList}\n\n어떤 카테고리의 트렌드를 분석하시겠습니까?` }
       ]);
@@ -58,8 +58,8 @@ const ChatPage = () => {
 
     try {
       // mode에 따라 다른 엔드포인트 호출
-      const endpoint = mode === 'data' ? 
-        'http://localhost:8000/api/chat' : 
+      const endpoint = mode === 'data' ?
+        'http://localhost:8000/api/chat' :
         'http://localhost:8000/api/trend-chat';
 
       const res = await fetch(endpoint, {
@@ -68,7 +68,7 @@ const ChatPage = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          content: message.trim(), 
+          content: message.trim(),
           mode: mode
         }),
       });
@@ -119,13 +119,13 @@ const ChatPage = () => {
       {/* 버튼을 별도 컨테이너로 분리 */}
       {chat.showButtons && (
         <div key={`buttons-${index}`} style={styles.modeButtonContainer}>
-          <button 
+          <button
             onClick={() => handleModeSelect('data')}
             style={styles.modeButton}
           >
             데이터 기반 조회
           </button>
-          <button 
+          <button
             onClick={() => handleModeSelect('trend')}
             style={styles.modeButton}
           >
@@ -155,8 +155,8 @@ const ChatPage = () => {
             style={styles.input}
             disabled={isLoading || !mode} // 모드 선택 전에는 입력 비활성화
           />
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={isLoading || !message.trim() || !mode}
             style={styles.button}
           >
@@ -196,9 +196,9 @@ const styles = {
   },
   container: {
     width: '100%',
-    maxWidth: '1100px', 
+    maxWidth: '1100px',
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: '12px', 
+    borderRadius: '12px',
     boxShadow: '0 10px 20px rgba(0, 0, 0, 0.08)',
     display: 'flex',
     flexDirection: 'column',
@@ -311,7 +311,7 @@ botMessage: {
   },
   modeButtonContainer: {
     display: 'flex',
-    justifyContent: 'flex-start', 
+    justifyContent: 'flex-start',
     gap: '10px',
     padding: '10px 20px',
     marginBottom: '15px',

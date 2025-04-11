@@ -302,7 +302,7 @@ const getCategoryIcon = (category) => {
 // WatchListItem 컴포넌트 수정
 const WatchListItem = ({ item }) => {
   const iconData = getCategoryIcon(item.symbol);
-  
+
   return (
     <div style={WATCHLIST_ITEM_STYLE}>
       <div style={{
@@ -510,7 +510,7 @@ function DashPage() {
           axios.get(`${API_BASE}/api/daily-top-sales`),
           axios.get(`${API_BASE}/api/topbottom`)
         ]);
-        
+
         setDailyTopSales(dailyTopRes.data);
         if (topBottomRes.data.top_10) {
           setTop10(topBottomRes.data.top_10);
@@ -827,10 +827,10 @@ function DashPage() {
     padding: "4px 8px",
     borderRadius: "12px",
     fontSize: "12px",
-    backgroundColor: 
+    backgroundColor:
       status === "completed" ? "#e6f4ea" :
       status === "pending" ? "#fff3e0" : "#ffebee",
-    color: 
+    color:
       status === "completed" ? "#1e8e3e" :
       status === "pending" ? "#f57c00" : "#d32f2f",
     marginRight: "10px"
@@ -1107,14 +1107,14 @@ function DashPage() {
           maxWidth: '70%',
           boxSizing: 'border-box'
         }}>
-          <h2 style={{ 
-            fontSize: '22px', 
+          <h2 style={{
+            fontSize: '22px',
             marginBottom: '30px',
             color: '#2c3e50',
             fontWeight: '600',
             letterSpacing: '0.3px'
           }}>일간 최다 매출 상품</h2>
-          
+
           {/* 테이블 헤더 */}
           <div style={{
             display: 'grid',
@@ -1153,19 +1153,19 @@ function DashPage() {
                   boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
                 }
               }}>
-                <div style={{ 
+                <div style={{
                   color: '#505764',
                   fontSize: '15px',
                   fontWeight: '500',
                   letterSpacing: '0.3px'
                 }}>{item.category}</div>
-                <div style={{ 
+                <div style={{
                   color: '#2c3e50',
                   fontWeight: '600',
                   fontSize: '16px',
                   letterSpacing: '0.3px'
                 }}>{item.subcategory}</div>
-                <div style={{ 
+                <div style={{
                   color: '#6c757d',
                   fontSize: '15px',
                   letterSpacing: '0.3px'
@@ -1176,7 +1176,7 @@ function DashPage() {
                     day: 'numeric'
                   })}
                 </div>
-                <div style={{ 
+                <div style={{
                   fontWeight: '600',
                   fontSize: '16px',
                   textAlign: 'right',
@@ -1208,8 +1208,8 @@ function DashPage() {
           boxSizing: 'border-box'
         }}>
           <div>
-            <h2 style={{ 
-              fontSize: '22px', 
+            <h2 style={{
+              fontSize: '22px',
               marginBottom: '30px',
               color: '#2c3e50',
               fontWeight: '600',
@@ -1223,10 +1223,10 @@ function DashPage() {
                   padding: '20px 25px 20px 60px',  // 패딩 약간 감소
                   marginBottom: '12px',  // 마진 약간 감소
                   borderRadius: '12px',
-                  background: index < 3 
+                  background: index < 3
                     ? 'linear-gradient(145deg, #ffffff, #fafbfc)'
                     : 'white',
-                  boxShadow: index < 3 
+                  boxShadow: index < 3
                     ? '0 4px 15px rgba(0,0,0,0.06)'
                     : '0 2px 8px rgba(0,0,0,0.03)',
                   transition: 'all 0.2s ease',
@@ -1237,8 +1237,8 @@ function DashPage() {
                   }
                 }}>
                   <RankIcon rank={index} />
-                  
-                  <div style={{ 
+
+                  <div style={{
                     position: 'absolute',
                     top: '15px',
                     left: index < 3 ? '50px' : '25px',
@@ -1248,24 +1248,24 @@ function DashPage() {
                     letterSpacing: '1px',
                     textTransform: 'uppercase'
                   }}>
-                    {index === 0 ? '1st' : 
-                     index === 1 ? '2nd' : 
-                     index === 2 ? '3rd' : 
+                    {index === 0 ? '1st' :
+                     index === 1 ? '2nd' :
+                     index === 2 ? '3rd' :
                      `${index + 1}th`}
                   </div>
-                  
-                  <div style={{ 
+
+                  <div style={{
                     flex: 1,
                     marginTop: '20px'
                   }}>
-                    <div style={{ 
+                    <div style={{
                       fontWeight: '600',
                       fontSize: index < 3 ? '18px' : '16px',
                       color: '#2c3e50',
                       marginBottom: '8px',
                       letterSpacing: '0.3px'
                     }}>{item.Sub3}</div>
-                    <div style={{ 
+                    <div style={{
                       color: '#505764',
                       fontSize: '15px',
                       display: 'flex',
@@ -1283,9 +1283,9 @@ function DashPage() {
               ))}
             </div>
           </div>
-          
+
           {/* 더보기 버튼 */}
-          <div 
+          <div
             onClick={() => setShowAllItems(!showAllItems)}
             style={{
               textAlign: 'center',

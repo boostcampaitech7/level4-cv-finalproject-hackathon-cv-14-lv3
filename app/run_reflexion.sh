@@ -6,4 +6,3 @@ python webshop_agent/run.py \
         --is_resume \
         --resume_dir "webshop_agent/reflexion_v2_logs_0" \
         --start_trial_num 1 \
-
