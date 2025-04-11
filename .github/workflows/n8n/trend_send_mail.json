@@ -1,0 +1,209 @@
+{
+  "name": "trend_send_mail",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "trend_product",
+        "limit": 100
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        700,
+        -160
+      ],
+      "id": "80dad646-0e54-4716-ad59-86072f61c952",
+      "name": "Supabase",
+      "credentials": {
+        "supabaseApi": {
+          "id": "Pt6nV2B9ZR7Nq7KD",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "results",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        860,
+        -160
+      ],
+      "id": "295e2c94-ca1f-4908-8272-46921f9880cd",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 입력 데이터에서 results 배열 가져오기\nconst items = $input.first().json.results;\n\n// 카테고리별로 아이템을 그룹화하고 랭크별로 정렬\nconst processedItems = items.reduce((acc, item) => {\n  const {\n    category,\n    rank,\n    product_name,\n    start_date,\n    end_date\n  } = item;\n\n  // 카테고리가 없으면 초기화\n  if (!acc[category]) {\n    acc[category] = {\n      category: category,\n      period: `${start_date} ~ ${end_date}`,\n      trends: []\n    };\n  }\n\n  // 랭크 5위까지만 수집\n  if (rank <= 5) {\n    acc[category].trends.push({\n      rank: rank,\n      product_name: product_name\n    });\n  }\n\n  return acc;\n}, {});\n\n// 객체를 배열로 변환하고 trends를 랭크 순으로 정렬\nconst sortedResults = Object.values(processedItems).map(categoryData => {\n  return {\n    ...categoryData,\n    trends: categoryData.trends.sort((a, b) => a.rank - b.rank)\n  };\n});\n\n// results 키로 감싸서 반환\nreturn {\n  results: sortedResults\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        -160
+      ],
+      "id": "a9c8d1f7-2109-4d5d-81fb-fc958e5e0cd2",
+      "name": "Info_Extractor"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 입력 데이터에서 results 배열 가져오기\nconst items = $input.first().json.results;\n\n// 이메일 내용 생성 함수\nfunction generateEmailContent(data) {\n // 현재 날짜 포맷팅\n const today = new Date();\n const formattedDate = today.toLocaleDateString('ko-KR', {\n   year: 'numeric',\n   month: 'long',\n   day: 'numeric'\n });\n\n // 이메일 헤더\n let emailContent = `\n월간 상품 트렌드 분석 리포트\n작성일: ${formattedDate}\n※ 본 결과는 네이버 데이터랩(Naver Datalab)의 쇼핑 트렌드 데이터를 참조하였습니다.\n`;\n\n // 각 카테고리별 트렌드 정보 추가\n data.forEach(category => {\n   emailContent += `\n━━━━━━━━━━━━━━━━━━━━━\n📈 ${category.category} 트렌드\n기간: ${category.period}\n━━━━━━━━━━━━━━━━━━━━━\n`;\n\n   // 트렌드 상품 목록 추가\n   category.trends.forEach(trend => {\n     emailContent += `${trend.rank}. ${trend.product_name}\\n`;\n   });\n\n   // 카테고리별 분석 요약 추가\n   const topProduct = category.trends[0];\n   emailContent += `\n- 이번 기간 ${category.category} 카테고리의 최상위 트렌드 상품은 \"${topProduct.product_name}\"입니다.\n`;\n });\n\n // 이메일 푸터\n emailContent += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n※ 본 리포트는 자동으로 생성된 트렌드 분석 데이터입니다.\n※ 데이터 출처: 네이버 데이터랩 쇼핑인사이트\n`;\n\n return emailContent;\n}\n\n// 이메일 제목 생성\nconst emailSubject = `[트렌드 리포트] ${items[0].period} 카테고리별 상품 트렌드 분석`;\n\n// 이메일 본문 생성\nconst emailBody = generateEmailContent(items);\n\n// 결과 반환\nreturn {\n email_data: {\n   subject: emailSubject,\n   body: emailBody\n }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        -160
+      ],
+      "id": "8aa6af37-74ed-4960-862b-42d6525f6cc7",
+      "name": "Abstract_Info"
+    },
+    {
+      "parameters": {
+        "sendTo": "taehan5479@gmail.com",
+        "subject": "={{ $json.email_data.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.email_data.body }}",
+        "options": {
+          "senderName": "GORANI"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1340,
+        -160
+      ],
+      "id": "04a7a220-1910-45a9-b11c-b10e9e02b196",
+      "name": "Send_Trend_Info",
+      "webhookId": "39c1f4f0-bd62-4959-a948-06a551cdbfeb",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ged36ZWz56iSUfsj",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "trending",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        520,
+        -160
+      ],
+      "id": "b61a09c9-205c-4a1a-a734-109f936cb152",
+      "name": "Webhook",
+      "webhookId": "cdb69a71-57fd-4ccb-ac47-878e9b855b60"
+    },
+    {
+      "parameters": {
+        "content": "### 트렌드 상품 불러오기\nDB의 trend_product 테이블 값 불러오기",
+        "height": 240,
+        "width": 300,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        680,
+        -240
+      ],
+      "typeVersion": 1,
+      "id": "acf14e2e-f4fb-4dd8-a36b-628e2501fa84",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "### 메일 알림 발송\n관리자 이메일로 트렌드 상품 보고서 발송",
+        "height": 240,
+        "width": 460
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1000,
+        -240
+      ],
+      "typeVersion": 1,
+      "id": "e3f4ce9c-d7ad-42a1-a6c8-81e5aa24ef5e",
+      "name": "Sticky Note1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Supabase": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Info_Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Info_Extractor": {
+      "main": [
+        [
+          {
+            "node": "Abstract_Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Abstract_Info": {
+      "main": [
+        [
+          {
+            "node": "Send_Trend_Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "31dbd5ac-1d85-4640-86f4-c5d0a1c5283a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "89ddddfba8d870bb904e2070b342d6e3bd595dc49e89131cde59469edd32e972"
+  },
+  "id": "PNhZwCY2KvprvWob",
+  "tags": []
+}
